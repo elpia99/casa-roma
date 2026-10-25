@@ -619,7 +619,7 @@ async function checkReminder() {
 const PORT = process.env.PORT || 3000;
 initDb()
   .then(() => {
-    app.listen(PORT, () => console.log(`Turni di casa in ascolto sulla porta ${PORT}`));
+    app.listen(PORT, () => console.log(`Casa Roma in ascolto sulla porta ${PORT}`));
     setInterval(() => checkReminder().catch((err) => console.error('Promemoria:', err)), 60 * 1000);
     checkReminder().catch((err) => console.error('Promemoria:', err));
   })

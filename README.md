@@ -1,4 +1,4 @@
-# Turni di casa
+# Casa Roma
 
 App web per Giulia, Ellen e Claudia: calendario condiviso con turni di pulizia e orari di sveglia, più la lista della spesa.
 
@@ -9,8 +9,7 @@ App web per Giulia, Ellen e Claudia: calendario condiviso con turni di pulizia e
   con **Mese** si allarga a tutto il mese. In ogni giorno si vedono i turni di pulizia e gli orari di sveglia, con il colore di ognuna.
   Si scorre con le frecce o con il dito.
 - **Sveglia**: ognuna segna entro le 23:00 a che ora si sveglia il giorno dopo. Alle 23:00 chi non l'ha ancora fatto riceve un promemoria.
-  Quando qualcuna segna o cambia l'orario, le altre ricevono una notifica. In grassetto chi va per prima in bagno,
-  quando un'altra si sveglia entro un'ora. L'orario si può ripetere ogni settimana per 4 settimane (es. ogni lunedì)
+  Quando qualcuna segna o cambia l'orario, le altre ricevono una notifica. L'orario si può ripetere ogni settimana per 4 settimane (es. ogni lunedì)
   oppure su giorni specifici scelti, e si può modificare o eliminare, anche tutta la serie.
 - **Pulizie**: Bagno e Cucina & Corridoio, a rotazione tra le tre, dal 27 ottobre a fine dicembre 2026.
   Ogni turno parte fisso il martedì. Di ogni turno si può cambiare la data, il tipo di pulizia e la persona assegnata;
