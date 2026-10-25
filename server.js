@@ -203,7 +203,16 @@ function dayLabel(day) {
 // ---------------------------------------------------------------------------
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+// Pagina, script e manifest non vanno tenuti in cache: così il telefono prende subito la versione nuova
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, file) => {
+    if (/\.(html|js|json)$/.test(file)) res.setHeader('Cache-Control', 'no-cache');
+  },
+}));
+
+// Cambia a ogni nuovo deploy: l'app aperta se ne accorge e si ricarica da sola
+const VERSION = String(Date.now());
+app.get('/api/version', (req, res) => res.set('Cache-Control', 'no-store').json({ version: VERSION }));
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
