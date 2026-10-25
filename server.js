@@ -16,23 +16,6 @@ const END_DATE = '2026-12-31';   // si generano tutte le settimane che iniziano 
 const BAGNO_ROTATION = ['Giulia', 'Ellen', 'Claudia'];
 const CUCINA_ROTATION = ['Claudia', 'Giulia', 'Ellen'];
 
-// Colori che si possono scegliere all'accesso (stile calendario Apple); ognuno può averlo una sola persona
-const PALETTE = [
-  { id: 'rosso', name: 'Rosso', hex: '#FF3B30' },
-  { id: 'arancione', name: 'Arancione', hex: '#FF9500' },
-  { id: 'giallo', name: 'Giallo', hex: '#FFCC00' },
-  { id: 'verde', name: 'Verde', hex: '#34C759' },
-  { id: 'menta', name: 'Menta', hex: '#00C7BE' },
-  { id: 'azzurro', name: 'Azzurro', hex: '#32ADE6' },
-  { id: 'blu', name: 'Blu', hex: '#007AFF' },
-  { id: 'viola', name: 'Viola', hex: '#AF52DE' },
-  { id: 'rosa', name: 'Rosa', hex: '#FF2D55' },
-  { id: 'marrone', name: 'Marrone', hex: '#A2845E' },
-];
-
-// Promemoria: chi non ha segnato la sveglia di domani riceve una notifica a quest'ora
-const REMINDER_HOUR = Number(process.env.REMINDER_HOUR) || 23;
-
 const TIME_ZONE = 'Europe/Rome';
 const GIORNI = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
 const MESI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
@@ -107,14 +90,6 @@ async function initDb() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
-    CREATE TABLE IF NOT EXISTS profiles (
-      person TEXT PRIMARY KEY,
-      color TEXT NOT NULL UNIQUE,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-    );
-    -- ogni turno di pulizia ha un giorno: di default il martedì della settimana, poi si può spostare
-    ALTER TABLE shifts ADD COLUMN IF NOT EXISTS day DATE;
-    UPDATE shifts SET day = week_start WHERE day IS NULL;
   `);
   await initPush();
 
@@ -125,7 +100,7 @@ async function initDb() {
   let i = 0;
   while (week <= END_DATE) {
     await pool.query(
-      'INSERT INTO shifts (week_start, task, person, day) VALUES ($1, $2, $3, $1), ($1, $4, $5, $1)',
+      'INSERT INTO shifts (week_start, task, person) VALUES ($1, $2, $3), ($1, $4, $5)',
       [week, 'bagno', BAGNO_ROTATION[i % 3], 'cucina', CUCINA_ROTATION[i % 3]]
     );
     week = addDays(week, 7);
@@ -162,12 +137,7 @@ async function initPush() {
 }
 
 async function notifyOthers(person, payload) {
-  return notifyPeople(PEOPLE.filter((p) => p !== person), payload);
-}
-
-async function notifyPeople(persons, payload) {
-  if (!persons.length) return;
-  const { rows } = await pool.query('SELECT endpoint, data FROM push_subscriptions WHERE person = ANY($1)', [persons]);
+  const { rows } = await pool.query('SELECT endpoint, data FROM push_subscriptions WHERE person <> $1', [person]);
   await Promise.all(rows.map(async (r) => {
     try {
       await webpush.sendNotification(r.data, JSON.stringify(payload), { TTL: 12 * 3600 });
@@ -210,60 +180,20 @@ const isPerson = (p) => PEOPLE.includes(p);
 
 app.get('/health', (req, res) => res.send('ok'));
 
-app.get('/api/config', (req, res) => res.json({ people: PEOPLE, tasks: TASKS, palette: PALETTE, reminderHour: REMINDER_HOUR }));
-
-// --- Accesso: nome + colore ---
-app.get('/api/profiles', wrap(async (req, res) => {
-  const { rows } = await pool.query('SELECT person, color FROM profiles');
-  res.json(rows);
-}));
-
-app.post('/api/login', wrap(async (req, res) => {
-  const { person, color } = req.body;
-  if (!isPerson(person)) throw new HttpError(400, 'Scegli il tuo nome.');
-  if (!PALETTE.some((c) => c.id === color)) throw new HttpError(400, 'Scegli un colore.');
-  const { rows: [taken] } = await pool.query('SELECT person FROM profiles WHERE color = $1 AND person <> $2', [color, person]);
-  if (taken) throw new HttpError(409, `Questo colore l’ha già scelto ${taken.person}.`);
-  const { rows } = await pool.query(
-    `INSERT INTO profiles (person, color) VALUES ($1, $2)
-     ON CONFLICT (person) DO UPDATE SET color = EXCLUDED.color, updated_at = now() RETURNING person, color`,
-    [person, color]
-  );
-  res.json(rows[0]);
-}));
+app.get('/api/config', (req, res) => res.json({ people: PEOPLE, tasks: TASKS }));
 
 app.get('/api/shifts', wrap(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM shifts ORDER BY week_start, task');
   res.json(rows);
 }));
 
-// Sposta il giorno del proprio turno (dentro la sua settimana) o lo segna come fatto
-app.patch('/api/shifts/:id', wrap(async (req, res) => {
-  const { person, day, done } = req.body;
-  const { rows: [s] } = await pool.query('SELECT * FROM shifts WHERE id = $1', [req.params.id]);
-  if (!s) throw new HttpError(404, 'Turno non trovato.');
-  if (s.person !== person) throw new HttpError(403, 'Puoi modificare solo i tuoi turni.');
-
-  let newDay = s.day;
-  if (day !== undefined) {
-    if (!DAY_RE.test(day || '') || day < s.week_start || day > addDays(s.week_start, 6)) {
-      throw new HttpError(400, 'Puoi spostarlo solo dentro la sua settimana (da martedì a lunedì).');
-    }
-    newDay = day;
-  }
-  const newDone = done === undefined ? s.done : Boolean(done);
-  const { rows: [updated] } = await pool.query(
-    'UPDATE shifts SET day = $1, done = $2 WHERE id = $3 RETURNING *', [newDay, newDone, s.id]
+app.patch('/api/shifts/:id/done', wrap(async (req, res) => {
+  const { rows } = await pool.query(
+    'UPDATE shifts SET done = $1 WHERE id = $2 RETURNING *',
+    [Boolean(req.body.done), req.params.id]
   );
-  res.json(updated);
-
-  if (newDay !== s.day) {
-    notifyOthers(person, {
-      title: `🧽 ${person} ha spostato il turno`,
-      body: `${TASKS[s.task]}: ora ${dayLabel(newDay)}.`,
-      tag: `shift-${s.id}`, url: '/',
-    }).catch((err) => console.error(err));
-  }
+  if (!rows[0]) throw new HttpError(404, 'Turno non trovato.');
+  res.json(rows[0]);
 }));
 
 app.get('/api/requests', wrap(async (req, res) => {
@@ -295,12 +225,6 @@ app.post('/api/requests', wrap(async (req, res) => {
      (message || '').toString().slice(0, 300) || null]
   );
   res.status(201).json(rows[0]);
-
-  notifyPeople([to_person], {
-    title: `🔄 ${from_person} ti chiede uno scambio`,
-    body: `Tu faresti ${TASKS[a.task].toLowerCase()} e lei ${TASKS[b.task].toLowerCase()} (settimana del ${dayLabel(a.week_start)}).`,
-    tag: `req-${rows[0].id}`, url: '/',
-  }).catch((err) => console.error(err));
 }));
 
 async function resolveRequest(id, person, action) {
@@ -329,13 +253,9 @@ async function resolveRequest(id, person, action) {
         await client.query('COMMIT');
         throw new HttpError(409, 'I turni sono cambiati nel frattempo: la richiesta non è più valida.');
       }
-      // Nella stessa settimana ognuna si tiene il giorno che aveva scelto
-      const sameWeek = b && a.week_start === b.week_start;
-      await client.query('UPDATE shifts SET person = $1, day = $2, done = false WHERE id = $3',
-        [r.to_person, sameWeek ? b.day : a.day, a.id]);
-      if (b) {
-        await client.query('UPDATE shifts SET person = $1, day = $2, done = false WHERE id = $3',
-          [r.from_person, sameWeek ? a.day : b.day, b.id]);
+      await client.query('UPDATE shifts SET person = $1, done = false WHERE id = $2', [r.to_person, a.id]);
+      if (r.kind === 'scambio') {
+        await client.query('UPDATE shifts SET person = $1, done = false WHERE id = $2', [r.from_person, b.id]);
       }
       await client.query(`UPDATE swap_requests SET status = 'accettata', resolved_at = now() WHERE id = $1`, [id]);
       // Le altre richieste in attesa sugli stessi turni non hanno più senso
@@ -346,13 +266,6 @@ async function resolveRequest(id, person, action) {
       );
     }
     await client.query('COMMIT');
-    if (action === 'accept' || action === 'reject') {
-      notifyPeople([r.from_person], {
-        title: action === 'accept' ? `✅ ${r.to_person} ha accettato lo scambio` : `${r.to_person} ha rifiutato lo scambio`,
-        body: action === 'accept' ? 'Il calendario è già aggiornato.' : 'Il turno resta com’era.',
-        tag: `req-${r.id}`, url: '/',
-      }).catch((err) => console.error(err));
-    }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     throw err;
@@ -522,37 +435,7 @@ app.post('/api/push/test', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
-// ---------------------------------------------------------------------------
-// Promemoria delle 23: chi non ha segnato la sveglia di domani riceve una notifica
-// ---------------------------------------------------------------------------
-async function checkReminder() {
-  const hour = Number(new Date().toLocaleString('en-GB', { timeZone: TIME_ZONE, hour: '2-digit', hourCycle: 'h23' }));
-  if (hour !== REMINDER_HOUR) return;
-  const today = romeToday();
-  const key = `reminder:${today}`;
-  // segna l'invio prima di farlo, così non parte due volte
-  const { rowCount } = await pool.query(
-    'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING', [key, new Date().toISOString()]
-  );
-  if (!rowCount) return;
-  const tomorrow = addDays(today, 1);
-  const { rows } = await pool.query('SELECT person FROM wake_times WHERE day = $1', [tomorrow]);
-  const missing = PEOPLE.filter((p) => !rows.some((r) => r.person === p));
-  for (const person of missing) {
-    await notifyPeople([person], {
-      title: '⏰ A che ora ti svegli domani?',
-      body: `Non hai ancora segnato la sveglia per ${dayLabel(tomorrow)}.`,
-      tag: `reminder-${tomorrow}`, url: '/',
-    });
-  }
-  if (missing.length) console.log(`Promemoria sveglia inviato a: ${missing.join(', ')}`);
-}
-
 const PORT = process.env.PORT || 3000;
 initDb()
-  .then(() => {
-    app.listen(PORT, () => console.log(`Turni di casa in ascolto sulla porta ${PORT}`));
-    setInterval(() => checkReminder().catch((err) => console.error('Promemoria:', err)), 60 * 1000);
-    checkReminder().catch((err) => console.error('Promemoria:', err));
-  })
+  .then(() => app.listen(PORT, () => console.log(`Turni di casa in ascolto sulla porta ${PORT}`)))
   .catch((err) => { console.error('Errore di avvio:', err); process.exit(1); });
