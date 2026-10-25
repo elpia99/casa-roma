@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Turni di casa</title>
+<link rel="icon" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1D2B24">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Turni">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #E9EFEA;
+    --surface: #FFFFFF;
+    --ink: #1D2B24;
+    --muted: #5E6E66;
+    --line: #CBD6CF;
+    --giulia: #D9921C;
+    --ellen: #2F6FA8;
+    --claudia: #B4416D;
+    --ok: #2E7D4F;
+    --font: "Bricolage Grotesque", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #141B17;
+      --surface: #1E2722;
+      --ink: #E6EEE9;
+      --muted: #9AABA2;
+      --line: #33423A;
+      --giulia: #F0B44A;
+      --ellen: #6FA8DC;
+      --claudia: #E07CA2;
+      --ok: #6CC891;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font);
+    font-size: 17px; line-height: 1.45;
+    padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+  }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 20px 18px 60px; }
+  header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  header.top h1 { font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.01em; }
+  .me { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 15px; }
+  select, textarea, button { font: inherit; color: inherit; }
+  select, textarea {
+    background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px;
+  }
+  nav.tabs { display: flex; gap: 6px; margin: 18px 0 8px; }
+  nav.tabs button {
+    border: 0; background: transparent; padding: 6px 12px; border-radius: 999px; cursor: pointer; color: var(--muted); font-weight: 600;
+  }
+  nav.tabs button[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+
+  /* Settimana corrente: l'elemento protagonista */
+  .now { margin: 22px 0 34px; }
+  .now .when { color: var(--muted); font-size: 15px; margin: 0 0 4px; }
+  .now h2 { font-size: clamp(30px, 7vw, 46px); font-weight: 800; line-height: 1.05; margin: 0 0 18px; letter-spacing: -0.02em; }
+  .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .slot { border-radius: 16px; padding: 14px; background: var(--surface); border: 1.5px solid var(--line); position: relative; min-height: 132px; display: flex; flex-direction: column; }
+  .slot .task { font-size: 14px; color: var(--muted); }
+  .slot .who { font-size: clamp(22px, 5vw, 30px); font-weight: 800; margin-top: auto; }
+  .slot.p-Giulia { border-color: var(--giulia); box-shadow: inset 0 -6px 0 var(--giulia); }
+  .slot.p-Ellen { border-color: var(--ellen); box-shadow: inset 0 -6px 0 var(--ellen); }
+  .slot.p-Claudia { border-color: var(--claudia); box-shadow: inset 0 -6px 0 var(--claudia); }
+  .slot.free { border-style: dashed; }
+  .slot .done-toggle { margin-top: 8px; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--muted); cursor: pointer; }
+  .slot.is-done .who { text-decoration: line-through; text-decoration-thickness: 3px; }
+  .slot.is-done .done-toggle { color: var(--ok); font-weight: 600; }
+  @media (max-width: 520px) { .board { grid-template-columns: 1fr; } .slot { min-height: 0; } }
+
+  h3 { font-size: 19px; font-weight: 800; margin: 34px 0 10px; }
+  .empty { color: var(--muted); font-size: 15px; margin: 0; }
+
+  .req { background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 8px; }
+  .req p { margin: 0 0 6px; }
+  .req .note { color: var(--muted); font-size: 15px; font-style: italic; }
+  .req .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .status { font-size: 14px; color: var(--muted); }
+
+  .btn { border: 1.5px solid var(--ink); background: var(--ink); color: var(--bg); border-radius: 10px; padding: 7px 14px; cursor: pointer; font-weight: 600; }
+  .btn.ghost { background: transparent; color: var(--ink); }
+  .btn.small { padding: 4px 10px; font-size: 14px; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline: 3px solid var(--ellen); outline-offset: 2px; }
+
+  .weeks { width: 100%; border-collapse: collapse; }
+  .weeks-scroll { overflow-x: auto; }
+  .weeks th { text-align: left; font-size: 14px; color: var(--muted); font-weight: 600; padding: 6px 8px; }
+  .weeks td { padding: 9px 8px; border-top: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+  .weeks tr.past td { opacity: .45; }
+  .weeks tr.current td { background: var(--surface); font-weight: 600; }
+  .weeks td.date { font-variant-numeric: tabular-nums; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; }
+  .chip::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+  .chip.p-Giulia { --c: var(--giulia); } .chip.p-Ellen { --c: var(--ellen); } .chip.p-Claudia { --c: var(--claudia); }
+  .chip.done { text-decoration: line-through; }
+  .ask { margin-left: 6px; }
+
+  dialog { border: 0; border-radius: 18px; padding: 0; background: var(--surface); color: var(--ink); width: min(440px, calc(100vw - 32px)); }
+  dialog::backdrop { background: rgba(10, 20, 15, .45); }
+  dialog form { padding: 20px; display: grid; gap: 14px; }
+  dialog h4 { margin: 0; font-size: 20px; font-weight: 800; }
+  dialog label { display: grid; gap: 4px; font-size: 15px; color: var(--muted); }
+  dialog .row { display: flex; justify-content: flex-end; gap: 8px; }
+  .error { color: var(--claudia); font-size: 15px; margin: 0; min-height: 1em; }
+
+  .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 12px; font-size: 15px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .toast.show { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+  /* Sveglia: calendario */
+  .cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 22px 0 6px; }
+  .cal-head h2 { font-size: clamp(28px, 6.5vw, 40px); font-weight: 800; margin: 0; letter-spacing: -0.02em; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin: 0 0 14px; }
+  .cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+  .cal .dow { font-size: 12px; color: var(--muted); text-align: center; padding: 2px 0 4px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .cal-day {
+    font: inherit; color: inherit; text-align: left; cursor: pointer;
+    background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px;
+    min-height: 74px; padding: 4px 3px; display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  }
+  .cal-day .num { font-size: 14px; font-weight: 700; align-self: flex-start; padding: 0 5px; border-radius: 999px; }
+  .cal-day .tm { display: flex; align-items: center; gap: 2px; font-size: 11.5px; letter-spacing: -0.02em; line-height: 1.25; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+  .cal-day .tm i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); flex: none; }
+  .cal-day .tm.first { font-weight: 800; }
+  .cal-day.past { background: transparent; }
+  .cal-day.out { opacity: .35; }
+  .cal-day.today .num { background: var(--ink); color: var(--bg); }
+  .cal-day.sel { border: 2px solid var(--ink); padding: 3.5px 2.5px; }
+  .tm.p-Giulia, .row.p-Giulia { --c: var(--giulia); } .tm.p-Ellen, .row.p-Ellen { --c: var(--ellen); } .tm.p-Claudia, .row.p-Claudia { --c: var(--claudia); }
+  @media (min-width: 600px) { .cal { gap: 5px; } .cal-day { min-height: 96px; padding: 7px; } .cal-day.sel { padding: 6.5px; } .cal-day .tm { font-size: 13px; gap: 4px; } .cal-day .tm i { width: 8px; height: 8px; } }
+
+  .daypanel { background: var(--surface); border: 1.5px solid var(--line); border-radius: 16px; padding: 16px; margin-top: 14px; scroll-margin-top: 12px; }
+  .daypanel h3 { margin: 0 0 10px; }
+  .daypanel .row { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 17px; }
+  .daypanel .row::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--c); }
+  .daypanel .row b { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .daypanel .row.first b::after { content: " · prima in bagno"; font-weight: 400; color: var(--muted); font-size: 14px; }
+  .set { display: grid; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+  .set .line { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .big-time {
+    font: inherit; font-size: clamp(34px, 9vw, 48px); font-weight: 800; letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums; color: var(--ink); background: var(--bg);
+    border: 2px solid var(--line); border-radius: 14px; padding: 2px 12px; max-width: 100%;
+  }
+  .set select { max-width: 100%; }
+  .notif { background: var(--surface); border: 1.5px dashed var(--line); border-radius: 14px; padding: 12px 14px; margin-top: 18px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .notif p { margin: 0; font-size: 15px; }
+  .weeknav { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 34px 0 10px; }
+  .weeknav h3 { margin: 0; }
+
+  /* Spesa */
+  .add { display: flex; gap: 8px; margin-bottom: 6px; }
+  .add input { font: inherit; background: var(--surface); color: var(--ink); border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; min-width: 0; }
+  .add input[name="name"] { flex: 1; font-size: 19px; }
+  .add input[name="qty"] { width: 90px; }
+  .list { list-style: none; margin: 0; padding: 0; }
+  .item { display: flex; align-items: center; gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--line); }
+  .item label { flex: 1; display: flex; align-items: center; gap: 12px; cursor: pointer; min-width: 0; }
+  .item input[type="checkbox"] { width: 24px; height: 24px; flex: none; accent-color: var(--ok); }
+  .item .name { font-size: 18px; font-weight: 600; overflow-wrap: anywhere; }
+  .item .qty { color: var(--muted); font-weight: 400; }
+  .item .by { display: block; font-size: 13px; color: var(--muted); font-weight: 400; }
+  .item.done .name { text-decoration: line-through; color: var(--muted); }
+  .item .del { border: 0; background: transparent; color: var(--muted); font-size: 22px; line-height: 1; padding: 4px 8px; cursor: pointer; border-radius: 8px; }
+  .count { font-variant-numeric: tabular-nums; }
+
+  .pick { text-align: center; padding: 60px 0; }
+  .pick h2 { font-size: 30px; font-weight: 800; margin: 0 0 18px; }
+  .pick .people { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .pick .people button { font-size: 20px; font-weight: 800; padding: 14px 22px; border-radius: 14px; border: 2px solid var(--c); background: var(--surface); cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Turni di casa</h1>
+    <label class="me" id="meBox" hidden>Sei
+      <select id="meSelect"></select>
+    </label>
+  </header>
+
+  <!-- Per aggiungere una sezione: un nuovo bottone qui e un nuovo <section data-view="..."> sotto -->
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="sveglia" aria-selected="true">Sveglia</button>
+    <button role="tab" data-tab="pulizie" aria-selected="false">Pulizie</button>
+    <button role="tab" data-tab="spesa" aria-selected="false">Spesa</button>
+  </nav>
+
+  <main id="app"><p class="empty">Caricamento…</p></main>
+</div>
+
+<dialog id="askDialog">
+  <form method="dialog" id="askForm">
+    <h4>Chiedi uno scambio</h4>
+    <p id="askWhat" style="margin:0"></p>
+    <label>A chi lo chiedi
+      <select name="to" id="askTo"></select>
+    </label>
+    <label>Quale suo turno prendi in cambio
+      <select name="target" id="askTarget"></select>
+      <span id="askWarn" class="status"></span>
+    </label>
+    <label>Messaggio (facoltativo)
+      <textarea name="message" rows="2" maxlength="300" placeholder="Es. sabato sono via, ti va di scambiare?"></textarea>
+    </label>
+    <p class="error" id="askError"></p>
+    <div class="row">
+      <button type="button" class="btn ghost" id="askCancel">Annulla</button>
+      <button type="submit" class="btn" id="askSend">Invia richiesta</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const MESI = ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'];
+const STATI = { in_attesa: 'In attesa', accettata: 'Accettata', rifiutata: 'Rifiutata', annullata: 'Annullata', superata: 'Non più valida' };
+const TABS = ['sveglia', 'pulizie', 'spesa'];
+function tabFromHash() { const h = location.hash.slice(1); return TABS.includes(h) ? h : TABS[0]; }
+const state = {
+  people: [], tasks: {}, shifts: [], requests: [], wake: [], items: [], me: '',
+  tab: tabFromHash(),
+  wakeMonth: null, wakeDay: null, push: 'unknown',
+};
+try { state.me = localStorage.getItem('turni-me') || ''; } catch {}
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, {
+    method: opts.method || 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Errore di connessione, riprova.');
+  return data;
+}
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+// --- date ---
+const parse = (d) => { const [y, m, g] = d.split('-').map(Number); return new Date(y, m - 1, g); };
+const iso = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+const addDays = (d, n) => { const x = parse(d); x.setDate(x.getDate() + n); return iso(x); };
+const today = () => iso(new Date());
+function range(ws) {
+  const a = parse(ws), b = parse(addDays(ws, 6));
+  return a.getMonth() === b.getMonth()
+    ? `${a.getDate()}–${b.getDate()} ${MESI[a.getMonth()]}`
+    : `${a.getDate()} ${MESI[a.getMonth()]} – ${b.getDate()} ${MESI[b.getMonth()]}`;
+}
+
+function weeks() {
+  const map = new Map();
+  for (const s of state.shifts) {
+    if (!map.has(s.week_start)) map.set(s.week_start, { week: s.week_start });
+    map.get(s.week_start)[s.task] = s;
+  }
+  return [...map.values()].map((w) => {
+    const busy = [w.bagno?.person, w.cucina?.person];
+    w.free = state.people.filter((p) => !busy.includes(p));
+    return w;
+  });
+}
+const shiftById = (id) => state.shifts.find((s) => s.id === id);
+const describe = (s) => s ? `${state.tasks[s.task]} (${range(s.week_start)})` : 'turno eliminato';
+
+// --- render ---
+function render() {
+  const app = $('#app');
+  if (!state.me) {
+    $('#meBox').hidden = true;
+    app.innerHTML = `<div class="pick"><h2>Chi sei?</h2><div class="people">${
+      state.people.map((p) => `<button style="--c:var(--${p.toLowerCase()})" data-me="${p}">${p}</button>`).join('')
+    }</div></div>`;
+    return;
+  }
+  $('#meBox').hidden = false;
+  $('#meSelect').innerHTML = state.people.map((p) => `<option ${p === state.me ? 'selected' : ''}>${p}</option>`).join('');
+  document.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === state.tab)));
+  if (state.tab === 'sveglia') return renderSveglia(app);
+  if (state.tab === 'spesa') return renderSpesa(app);
+
+  const t = today();
+  const all = weeks();
+  const current = all.find((w) => w.week <= t && t <= addDays(w.week, 6));
+  const shown = current || all.find((w) => w.week > t);
+
+  let html = '';
+  if (shown) {
+    const mine = [shown.bagno, shown.cucina].find((s) => s?.person === state.me);
+    const headline = mine ? `Tocca a te: ${state.tasks[mine.task].toLowerCase()}`
+      : shown.free.includes(state.me) ? 'Settimana libera' : 'Questa settimana';
+    html += `<section class="now">
+      <p class="when">${current ? 'Questa settimana' : 'Si parte'} · ${range(shown.week)}</p>
+      <h2>${esc(headline)}</h2>
+      <div class="board">
+        ${['bagno', 'cucina'].map((k) => slot(shown[k])).join('')}
+        ${shown.free.map((p) => `<div class="slot free p-${p}"><span class="task">Libera</span><span class="who">${p}</span></div>`).join('')}
+      </div>
+    </section>`;
+  } else {
+    html += `<section class="now"><h2>Il calendario è finito</h2><p class="empty">Tutti i turni fino a fine dicembre sono passati.</p></section>`;
+  }
+
+  const pending = state.requests.filter((r) => r.status === 'in_attesa');
+  const incoming = pending.filter((r) => r.to_person === state.me);
+  const outgoing = pending.filter((r) => r.from_person === state.me);
+
+  html += `<h3>Richieste per te</h3>`;
+  html += incoming.length ? incoming.map((r) => reqCard(r, 'in')).join('') : `<p class="empty">Nessuna richiesta da gestire.</p>`;
+  if (outgoing.length) html += `<h3>Le tue richieste in attesa</h3>` + outgoing.map((r) => reqCard(r, 'out')).join('');
+
+  html += `<h3>Calendario</h3><div class="weeks-scroll"><table class="weeks">
+    <thead><tr><th>Settimana</th><th>${state.tasks.bagno}</th><th>${state.tasks.cucina}</th><th>Libera</th></tr></thead><tbody>
+    ${all.map((w) => {
+      const past = addDays(w.week, 6) < t;
+      const cls = past ? 'past' : (w === current ? 'current' : '');
+      return `<tr class="${cls}"><td class="date">${range(w.week)}</td>
+        <td>${cell(w.bagno, past)}</td><td>${cell(w.cucina, past)}</td>
+        <td>${w.free.map((p) => `<span class="chip p-${p}">${p}</span>`).join(' ')}</td></tr>`;
+    }).join('')}
+  </tbody></table></div>`;
+
+  const history = state.requests.filter((r) => r.status !== 'in_attesa').slice(0, 10);
+  if (history.length) {
+    html += `<h3>Ultimi cambi</h3>` + history.map((r) => `<div class="req"><p>${esc(summary(r))}</p><span class="status">${STATI[r.status] || r.status}</span></div>`).join('');
+  }
+  app.innerHTML = html;
+}
+
+function slot(s) {
+  if (!s) return '';
+  const canToggle = s.person === state.me;
+  return `<div class="slot p-${s.person} ${s.done ? 'is-done' : ''}">
+    <span class="task">${state.tasks[s.task]}</span>
+    <span class="who">${s.person}</span>
+    ${canToggle
+      ? `<label class="done-toggle"><input type="checkbox" data-done="${s.id}" ${s.done ? 'checked' : ''}> ${s.done ? 'Fatto' : 'Segna come fatto'}</label>`
+      : `<span class="done-toggle">${s.done ? 'Fatto' : 'Da fare'}</span>`}
+  </div>`;
+}
+
+function cell(s, past) {
+  if (!s) return '';
+  const ask = !past && s.person === state.me
+    ? `<button class="btn ghost small ask" data-ask="${s.id}">Chiedi scambio</button>` : '';
+  return `<span class="chip p-${s.person} ${s.done ? 'done' : ''}">${s.person}</span>${ask}`;
+}
+
+function summary(r) {
+  const a = shiftById(r.from_shift_id), b = shiftById(r.to_shift_id);
+  return `${r.from_person} chiede a ${r.to_person} di scambiare ${describe(a)} con ${describe(b)}`;
+}
+
+function reqCard(r, dir) {
+  const a = shiftById(r.from_shift_id), b = shiftById(r.to_shift_id);
+  const text = dir === 'in'
+    ? `${r.from_person} vuole darti ${describe(a)} e prendere il tuo ${describe(b)}.`
+    : `Hai chiesto a ${r.to_person}: tu prendi ${describe(b)}, lei prende ${describe(a)}.`;
+  const actions = dir === 'in'
+    ? `<button class="btn small" data-act="accept" data-id="${r.id}">Accetta</button>
+       <button class="btn ghost small" data-act="reject" data-id="${r.id}">Rifiuta</button>`
+    : `<button class="btn ghost small" data-act="cancel" data-id="${r.id}">Annulla richiesta</button>`;
+  return `<div class="req"><p>${esc(text)}</p>${r.message ? `<p class="note">“${esc(r.message)}”</p>` : ''}<div class="actions">${actions}</div></div>`;
+}
+
+// --- dati ---
+async function load() {
+  try {
+    const [shifts, requests, wake, items] = await Promise.all([
+      api('/api/shifts'), api('/api/requests'), api('/api/wake'), api('/api/shopping'),
+    ]);
+    state.shifts = shifts; state.requests = requests; state.wake = wake; state.items = items;
+    render();
+  } catch (e) { toast(e.message); }
+}
+
+// aggiornamento automatico, senza disturbare chi sta scrivendo
+setInterval(() => {
+  const typing = document.activeElement && document.activeElement.closest('#app, dialog') && document.activeElement.matches('input, textarea, select');
+  if (!document.hidden && !typing && !$('#askDialog').open && state.me) load();
+}, 15000);
+
+// ---------------------------------------------------------------------------
+// Spesa
+// ---------------------------------------------------------------------------
+function itemRow(it) {
+  const by = it.done ? `preso da ${it.done_by}` : `aggiunto da ${it.added_by}`;
+  return `<li class="item ${it.done ? 'done' : ''}">
+    <label><input type="checkbox" data-item="${it.id}" ${it.done ? 'checked' : ''}>
+      <span><span class="name">${esc(it.name)}${it.qty ? ` <span class="qty">· ${esc(it.qty)}</span>` : ''}</span>
+      <span class="by">${esc(by)}</span></span>
+    </label>
+    <button class="del" data-del="${it.id}" aria-label="Elimina ${esc(it.name)}">×</button>
+  </li>`;
+}
+
+function renderSpesa(app) {
+  const todo = state.items.filter((i) => !i.done);
+  const done = state.items.filter((i) => i.done);
+  app.innerHTML = `<section class="now">
+      <p class="when">Lista condivisa</p>
+      <h2>${todo.length ? `<span class="count">${todo.length}</span> ${todo.length === 1 ? 'cosa' : 'cose'} da comprare` : 'Non manca niente'}</h2>
+      <form class="add" id="addForm" autocomplete="off">
+        <input name="name" placeholder="Cosa manca?" maxlength="80" aria-label="Cosa manca" required>
+        <input name="qty" placeholder="Quanto" maxlength="30" aria-label="Quantità (facoltativa)">
+        <button class="btn" type="submit">Aggiungi</button>
+      </form>
+    </section>
+    ${todo.length ? `<ul class="list">${todo.map(itemRow).join('')}</ul>` : `<p class="empty">Quando finisce qualcosa, aggiungilo qui.</p>`}
+    ${done.length ? `<div class="weeknav"><h3>Già preso</h3>
+        <button class="btn ghost small" data-clear>Svuota già presi</button></div>
+      <ul class="list">${done.map(itemRow).join('')}</ul>` : ''}`;
+}
+
+$('#app').addEventListener('submit', async (e) => {
+  if (e.target.id !== 'addForm') return;
+  e.preventDefault();
+  const f = e.target;
+  const name = f.elements.namedItem('name').value.trim(), qty = f.elements.namedItem('qty').value.trim();
+  if (!name) return;
+  try {
+    const item = await api('/api/shopping', { method: 'POST', body: { person: state.me, name, qty } });
+    state.items = [item, ...state.items.filter((i) => i.id !== item.id)];
+    render();
+    $('#addForm input[name="name"]').focus(); // si possono aggiungere più cose di fila
+  } catch (err) { toast(err.message); }
+});
+
+$('#app').addEventListener('click', async (e) => {
+  const del = e.target.closest('[data-del]');
+  if (del) {
+    const id = Number(del.dataset.del);
+    state.items = state.items.filter((i) => i.id !== id);
+    render();
+    await api(`/api/shopping/${id}`, { method: 'DELETE' }).catch((err) => toast(err.message));
+    return;
+  }
+  if (e.target.closest('[data-clear]')) {
+    state.items = state.items.filter((i) => !i.done);
+    render();
+    await api('/api/shopping/clear-done', { method: 'POST' }).catch((err) => toast(err.message));
+  }
+});
+
+$('#app').addEventListener('change', async (e) => {
+  const id = Number(e.target.dataset.item);
+  if (!id) return;
+  const done = e.target.checked;
+  const it = state.items.find((i) => i.id === id);
+  if (it) Object.assign(it, { done, done_by: done ? state.me : null });
+  render();
+  try {
+    const updated = await api(`/api/shopping/${id}`, { method: 'PATCH', body: { person: state.me, done } });
+    state.items = state.items.map((i) => (i.id === id ? updated : i));
+  } catch (err) { toast(err.message); await load(); }
+});
+
+function setMe(p) {
+  state.me = p;
+  try { localStorage.setItem('turni-me', p); } catch {}
+  syncPush();
+  render();
+}
+
+// ---------------------------------------------------------------------------
+// Sveglia
+// ---------------------------------------------------------------------------
+const GIORNI = ['dom', 'lun', 'mar', 'mer', 'gio', 'ven', 'sab'];
+const GIORNI_LUNGHI = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
+const mondayOf = (d) => { const x = parse(d); return addDays(d, -((x.getDay() + 6) % 7)); };
+const dayName = (d) => { const x = parse(d); return `${GIORNI_LUNGHI[x.getDay()]} ${x.getDate()} ${MESI[x.getMonth()]}`; };
+const wakeOf = (person, day) => state.wake.find((w) => w.person === person && w.day === day)?.time || '';
+
+function pushPanel() {
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+  if (state.push === 'on') {
+    return `<div class="notif"><p>Notifiche attive su questo dispositivo.</p>
+      <span><button class="btn ghost small" data-push="test">Prova</button>
+      <button class="btn ghost small" data-push="off">Disattiva</button></span></div>`;
+  }
+  if (ios && !standalone) {
+    return `<div class="notif"><p>Per ricevere le notifiche su iPhone: tocca Condividi, poi “Aggiungi alla schermata Home”, e apri l’app da lì.</p></div>`;
+  }
+  if (state.push === 'unsupported') {
+    return `<div class="notif"><p>Questo browser non supporta le notifiche. Prova con Chrome, Firefox o Safari aggiornati.</p></div>`;
+  }
+  if (state.push === 'denied') {
+    return `<div class="notif"><p>Le notifiche sono bloccate: riattivale dalle impostazioni del browser per questo sito.</p></div>`;
+  }
+  return `<div class="notif"><p>Attiva le notifiche per sapere quando le altre indicano la sveglia.</p>
+    <button class="btn small" data-push="on">Attiva notifiche</button></div>`;
+}
+
+const MESI_LUNGHI = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+const firstOfMonth = (d) => d.slice(0, 8) + '01';
+const addMonths = (m, n) => { const x = parse(m); x.setDate(1); x.setMonth(x.getMonth() + n); return iso(x); };
+const mins = (x) => { const [h, m] = x.split(':').map(Number); return h * 60 + m; };
+
+// chi si sveglia per prima, solo se un'altra si sveglia entro un'ora
+function firstOfDay(d) {
+  const times = state.people.map((p) => wakeOf(p, d)).filter(Boolean).sort();
+  return times.length > 1 && mins(times[1]) - mins(times[0]) <= 60 ? times[0] : null;
+}
+
+function repeatDays(day, mode) {
+  if (mode === 'weekly') return Array.from({ length: 8 }, (_, i) => addDays(day, i * 7));
+  if (mode === 'workweek') {
+    const dow = parse(day).getDay(); // 1 = lun ... 5 = ven
+    return Array.from({ length: 5 - dow + 1 }, (_, i) => addDays(day, i));
+  }
+  return [day];
+}
+
+function renderSveglia(app) {
+  const t = today(), tom = addDays(t, 1);
+  if (!state.wakeDay) state.wakeDay = tom;
+  if (!state.wakeMonth) state.wakeMonth = firstOfMonth(state.wakeDay);
+  const m = state.wakeMonth, sel = state.wakeDay;
+  const start = mondayOf(m);
+  const end = addDays(mondayOf(addDays(addMonths(m, 1), -1)), 6);
+  const days = [];
+  for (let d = start; d <= end; d = addDays(d, 1)) days.push(d);
+  const monthIdx = parse(m).getMonth();
+
+  const cells = days.map((d) => {
+    const first = firstOfDay(d);
+    const cls = [
+      d === t && 'today', d === sel && 'sel', d < t && 'past', parse(d).getMonth() !== monthIdx && 'out',
+    ].filter(Boolean).join(' ');
+    const times = state.people.map((p) => {
+      const v = wakeOf(p, d);
+      return v ? `<span class="tm p-${p} ${v === first ? 'first' : ''}"><i></i>${v.replace(/^0/, '')}</span>` : '';
+    }).join('');
+    return `<button class="cal-day ${cls}" data-day="${d}" aria-pressed="${d === sel}" aria-label="${dayName(d)}">
+      <span class="num">${parse(d).getDate()}</span>${times}</button>`;
+  }).join('');
+
+  // pannello del giorno scelto
+  const first = firstOfDay(sel);
+  const mine = wakeOf(state.me, sel);
+  const when = sel === t ? ' · oggi' : sel === tom ? ' · domani' : '';
+  const rows = state.people.map((p) => {
+    const v = wakeOf(p, sel);
+    return `<div class="row p-${p} ${v && v === first ? 'first' : ''}">${p}${p === state.me ? ' (tu)' : ''}<b>${v || '—'}</b></div>`;
+  }).join('');
+  const dow = parse(sel).getDay();
+  const editor = sel < t
+    ? `<p class="empty" style="margin-top:10px">Giorno passato.</p>`
+    : `<div class="set">
+        <label class="status" for="wakeTime">A che ora ti svegli?</label>
+        <div class="line">
+          <input type="time" class="big-time" id="wakeTime" value="${mine}">
+        </div>
+        <div class="line">
+          <select id="wakeRepeat" aria-label="Ripeti">
+            <option value="one">Solo questo giorno</option>
+            <option value="weekly">Ogni ${GIORNI_LUNGHI[dow]} per 8 settimane</option>
+            ${dow >= 1 && dow <= 4 ? `<option value="workweek">Da ${GIORNI_LUNGHI[dow]} a venerdì</option>` : ''}
+          </select>
+        </div>
+        <div class="line">
+          <button class="btn" data-wake-save>${mine ? 'Aggiorna' : 'Salva'}</button>
+          ${mine ? '<button class="btn ghost" data-wake-del>Togli orario</button>' : ''}
+        </div>
+        <p class="status" style="margin:0">Le altre ricevono una notifica.</p>
+      </div>`;
+
+  app.innerHTML = `
+    <div class="cal-head">
+      <button class="btn ghost small" data-month="-1" aria-label="Mese precedente">‹</button>
+      <h2>${MESI_LUNGHI[monthIdx].replace(/^./, (c) => c.toUpperCase())} ${parse(m).getFullYear()}</h2>
+      <button class="btn ghost small" data-month="1" aria-label="Mese successivo">›</button>
+    </div>
+    <p class="legend">${state.people.map((p) => `<span class="chip p-${p}">${p}</span>`).join('')}
+</p>
+    <div class="cal">
+      ${['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'].map((g) => `<span class="dow">${g}</span>`).join('')}
+      ${cells}
+    </div>
+    <p class="empty" style="font-size:13px;margin-top:6px">In grassetto chi va per prima in bagno, quando un’altra si sveglia entro un’ora.</p>
+    <section class="daypanel" id="dayPanel">
+      <h3>${dayName(sel).replace(/^./, (c) => c.toUpperCase())}${when}</h3>
+      ${rows}
+      ${editor}
+    </section>
+    ${pushPanel()}`;
+}
+
+async function saveWake(days, time) {
+  if (time) {
+    await api('/api/wake/bulk', { method: 'PUT', body: { person: state.me, days, time } });
+  } else {
+    await api('/api/wake', { method: 'DELETE', body: { person: state.me, day: days[0] } });
+  }
+  const rest = state.wake.filter((w) => !(w.person === state.me && days.includes(w.day)));
+  state.wake = time ? [...rest, ...days.map((day) => ({ person: state.me, day, time }))] : rest;
+}
+
+// ---------------------------------------------------------------------------
+// Notifiche push
+// ---------------------------------------------------------------------------
+const keyBytes = (b64) => {
+  const raw = atob((b64 + '='.repeat((4 - b64.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/'));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+};
+const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+
+async function currentSub() {
+  if (!pushSupported()) return null;
+  const reg = await navigator.serviceWorker.getRegistration();
+  return reg ? reg.pushManager.getSubscription() : null;
+}
+
+async function syncPush() {
+  if (!pushSupported()) { state.push = 'unsupported'; return; }
+  if (Notification.permission === 'denied') { state.push = 'denied'; return; }
+  const sub = await currentSub().catch(() => null);
+  if (sub && Notification.permission === 'granted' && state.me) {
+    state.push = 'on';
+    // tiene aggiornato a chi appartiene questo dispositivo
+    await api('/api/push/subscribe', { method: 'POST', body: { person: state.me, subscription: sub.toJSON() } }).catch(() => {});
+  } else {
+    state.push = 'off';
+  }
+}
+
+async function enablePush() {
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') { state.push = perm === 'denied' ? 'denied' : 'off'; render(); return; }
+  const reg = await navigator.serviceWorker.ready;
+  const { key } = await api('/api/push/key');
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) });
+  await api('/api/push/subscribe', { method: 'POST', body: { person: state.me, subscription: sub.toJSON() } });
+  state.push = 'on';
+  toast('Notifiche attive');
+  render();
+}
+
+async function disablePush() {
+  const sub = await currentSub();
+  if (sub) {
+    await api('/api/push/unsubscribe', { method: 'POST', body: { endpoint: sub.endpoint } }).catch(() => {});
+    await sub.unsubscribe();
+  }
+  state.push = 'off';
+  toast('Notifiche disattivate');
+  render();
+}
+
+// --- dialog richiesta ---
+let askShift = null;
+function openAsk(id) {
+  askShift = shiftById(id);
+  $('#askWhat').textContent = `Il tuo turno: ${describe(askShift)}`;
+  $('#askTo').innerHTML = state.people.filter((p) => p !== state.me).map((p) => `<option>${p}</option>`).join('');
+  $('#askError').textContent = '';
+  $('#askForm').reset();
+  updateAsk();
+  $('#askDialog').showModal();
+}
+function updateAsk() {
+  const to = $('#askTo').value;
+  const t = today();
+  const options = state.shifts.filter((s) => s.person === to && addDays(s.week_start, 6) >= t);
+  $('#askTarget').innerHTML = options.length
+    ? options.map((s) => `<option value="${s.id}" ${s.week_start === askShift.week_start ? 'selected' : ''}>${describe(s)}</option>`).join('')
+    : `<option value="">${to} non ha turni futuri</option>`;
+  warnAsk();
+}
+// avvisa se dopo lo scambio qualcuna avrebbe due compiti nella stessa settimana
+function warnAsk() {
+  const b = shiftById(Number($('#askTarget').value));
+  let msg = '';
+  if (b && b.week_start !== askShift.week_start) {
+    const clash = (week, person, exceptId) => state.shifts.some((s) => s.week_start === week && s.person === person && s.id !== exceptId);
+    if (clash(askShift.week_start, b.person, askShift.id) || clash(b.week_start, state.me, b.id)) {
+      msg = 'Attenzione: con questo scambio qualcuna avrà due compiti nella stessa settimana.';
+    }
+  }
+  $('#askWarn').textContent = msg;
+}
+$('#askTarget').addEventListener('change', warnAsk);
+$('#askForm').addEventListener('change', (e) => { if (e.target.id === 'askTo') updateAsk(); });
+$('#askCancel').addEventListener('click', () => $('#askDialog').close());
+$('#askForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const body = {
+    kind: 'scambio', from_person: state.me, to_person: f.to.value,
+    from_shift_id: askShift.id, to_shift_id: Number(f.target.value) || null, message: f.message.value.trim(),
+  };
+  if (!body.to_shift_id) { $('#askError').textContent = 'Scegli un turno da prendere in cambio.'; return; }
+  $('#askSend').disabled = true;
+  try {
+    await api('/api/requests', { method: 'POST', body });
+    $('#askDialog').close();
+    toast(`Richiesta inviata a ${body.to_person}`);
+    await load();
+  } catch (err) { $('#askError').textContent = err.message; }
+  finally { $('#askSend').disabled = false; }
+});
+
+// --- eventi ---
+$('#meSelect').addEventListener('change', (e) => setMe(e.target.value));
+document.querySelector('nav.tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-tab]');
+  if (!b) return;
+  state.tab = b.dataset.tab;
+  history.replaceState(null, '', state.tab === TABS[0] ? location.pathname : '#' + state.tab);
+  render();
+});
+window.addEventListener('hashchange', () => { state.tab = tabFromHash(); render(); });
+
+$('#app').addEventListener('click', async (e) => {
+  const dayBtn = e.target.closest('[data-day]');
+  if (dayBtn) {
+    state.wakeDay = dayBtn.dataset.day;
+    if (firstOfMonth(state.wakeDay) !== state.wakeMonth) state.wakeMonth = firstOfMonth(state.wakeDay);
+    render();
+    $('#dayPanel').scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    return;
+  }
+  const month = e.target.closest('[data-month]');
+  if (month) { state.wakeMonth = addMonths(state.wakeMonth, Number(month.dataset.month)); render(); return; }
+  const save = e.target.closest('[data-wake-save]');
+  if (save) {
+    const time = $('#wakeTime').value;
+    if (!time) { toast('Scegli un orario'); return; }
+    const days = repeatDays(state.wakeDay, $('#wakeRepeat').value);
+    save.disabled = true;
+    try {
+      await saveWake(days, time);
+      toast(days.length > 1 ? `Salvato alle ${time} per ${days.length} giorni` : `Salvato: ${dayName(days[0])} alle ${time}`);
+    } catch (err) { toast(err.message); }
+    render();
+    return;
+  }
+  if (e.target.closest('[data-wake-del]')) {
+    try { await saveWake([state.wakeDay], ''); toast('Orario tolto'); }
+    catch (err) { toast(err.message); }
+    render();
+    return;
+  }
+  const push = e.target.closest('[data-push]');
+  if (push) {
+    push.disabled = true;
+    try {
+      if (push.dataset.push === 'on') await enablePush();
+      else if (push.dataset.push === 'off') await disablePush();
+      else {
+        const sub = await currentSub();
+        await api('/api/push/test', { method: 'POST', body: { endpoint: sub && sub.endpoint } });
+        toast('Notifica di prova inviata');
+      }
+    } catch (err) { toast(err.message || 'Non è stato possibile attivare le notifiche'); }
+    push.disabled = false;
+  }
+});
+
+$('#app').addEventListener('click', async (e) => {
+  const me = e.target.closest('[data-me]');
+  if (me) return setMe(me.dataset.me);
+  const ask = e.target.closest('[data-ask]');
+  if (ask) return openAsk(Number(ask.dataset.ask));
+  const act = e.target.closest('[data-act]');
+  if (act) {
+    act.disabled = true;
+    try {
+      await api(`/api/requests/${act.dataset.id}/${act.dataset.act}`, { method: 'POST', body: { person: state.me } });
+      toast({ accept: 'Cambio accettato: calendario aggiornato', reject: 'Richiesta rifiutata', cancel: 'Richiesta annullata' }[act.dataset.act]);
+    } catch (err) { toast(err.message); }
+    await load();
+  }
+});
+$('#app').addEventListener('change', async (e) => {
+  const id = e.target.dataset.done;
+  if (!id) return;
+  try { await api(`/api/shifts/${id}/done`, { method: 'PATCH', body: { done: e.target.checked } }); }
+  catch (err) { toast(err.message); }
+  await load();
+});
+
+// aggiorna quando si torna sull'app
+document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+
+(async () => {
+  try {
+    const cfg = await api('/api/config');
+    state.people = cfg.people; state.tasks = cfg.tasks;
+    if (state.me && !state.people.includes(state.me)) state.me = '';
+  } catch (e) { $('#app').innerHTML = `<p class="empty">${esc(e.message)}</p>`; return; }
+  if ('serviceWorker' in navigator) await navigator.serviceWorker.register('/sw.js').catch(() => {});
+  await syncPush();
+  await load();
+})();
+</script>
+</body>
+</html>
