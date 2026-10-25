@@ -1,64 +1,33 @@
 # Turni di casa
 
-App web per gestire i turni di casa tra Giulia, Ellen e Claudia.
+App web per Giulia, Ellen e Claudia: calendario condiviso con turni di pulizia e orari di sveglia, più la lista della spesa.
 
-## Pulizie
-- Due compiti a settimana: **Bagno** e **Cucina & corridoio**; la terza persona è libera.
-- Ogni turno dura una settimana, da martedì a lunedì, dal 27 ottobre fino a fine dicembre 2026.
-- Prima settimana: Giulia bagno, Claudia cucina & corridoio, Ellen libera. Poi si ruota:
-  chi era libera fa il bagno, chi ha fatto il bagno fa la cucina, chi ha fatto la cucina riposa.
-- Richieste di scambio: scegli un tuo turno e un turno di un'altra da prendere in cambio.
-  La destinataria accetta o rifiuta; se accetta, il calendario si aggiorna da solo.
-- Ognuna può segnare il proprio turno come fatto.
-
-## Sveglia
-- Calendario mensile con gli orari di sveglia di tutte e tre, ognuna con il suo colore.
-- Tocca un giorno per vedere chi si sveglia a che ora e impostare il tuo orario.
-- Puoi ripetere l'orario: solo quel giorno, lo stesso giorno della settimana per 8 settimane, oppure fino al venerdì.
-- Quando qualcuna salva o cambia l'orario, le altre ricevono una notifica sul telefono.
-- In grassetto chi si sveglia per prima, ma solo quando un'altra si sveglia entro un'ora da lei.
-
-### Attivare le notifiche
-Ognuna apre l'app sul proprio telefono, va su **Sveglia** e tocca **Attiva notifiche**.
-- **Android / computer**: funziona direttamente da Chrome, Firefox o Edge.
-- **iPhone** (iOS 16.4 o successivo): prima bisogna aprire il sito in Safari, toccare Condividi →
-  "Aggiungi alla schermata Home", e poi aprire l'app dall'icona. Solo così iOS consente le notifiche.
-
-Le chiavi per le notifiche vengono create da sole al primo avvio e salvate nel database.
-Facoltativo ma consigliato: in Railway aggiungi la variabile `VAPID_SUBJECT` con la tua email,
-nel formato `mailto:nome@esempio.it` (Apple a volte rifiuta l'indirizzo di default).
-
-## Spesa
-- Lista condivisa: si scrive cosa manca (con la quantità, se serve) e compare a tutte.
-- Al supermercato si spunta ciò che si è preso; la voce passa in "Già preso" con il nome di chi l'ha preso.
-- "Svuota già presi" pulisce la lista. Se si riaggiunge qualcosa già preso in passato, torna semplicemente in lista.
-- L'app si aggiorna da sola ogni 15 secondi, così vedi le aggiunte delle altre mentre sei al supermercato.
-
-All'apertura l'app chiede "Chi sei?" e se lo ricorda su quel telefono.
+## Come funziona
+- **Accesso**: ognuna entra con il proprio nome e sceglie un colore. Un colore già scelto da un'altra non si può prendere.
+  Il colore si può cambiare in qualsiasi momento dalla scheda "Tu".
+- **Calendario** (stile calendario Apple): in ogni giorno si vedono i turni di pulizia e gli orari di sveglia, con il colore di ognuna.
+  Tocca un giorno per vedere i dettagli sotto il calendario. Si scorre tra i mesi con le frecce o con il dito.
+- **Sveglia**: ognuna segna entro le 23:00 a che ora si sveglia il giorno dopo. Alle 23:00 chi non l'ha ancora fatto riceve un promemoria.
+  Quando qualcuna segna o cambia l'orario, le altre ricevono una notifica. In grassetto chi va per prima in bagno,
+  quando un'altra si sveglia entro un'ora. L'orario si può ripetere (stesso giorno per 8 settimane, oppure fino a venerdì).
+- **Pulizie**: Bagno e Cucina & corridoio, a rotazione tra le tre, dal 27 ottobre a fine dicembre 2026.
+  Ogni turno parte fisso il martedì. Chi ha il turno può spostarlo in un altro giorno della stessa settimana
+  e può chiedere di cambiare tipo di pulizia: l'altra persona di turno riceve la richiesta e deve accettare.
+- **Spesa**: lista condivisa da spuntare.
 
 ## Deploy su Railway
-1. Crea un repository su GitHub e carica questi file:
-   ```bash
-   git init && git add . && git commit -m "Turni di casa"
-   git branch -M main
-   git remote add origin https://github.com/TUO-UTENTE/turni-casa.git
-   git push -u origin main
-   ```
+1. Carica i file su GitHub (la cartella `public` deve esserci con tutti i suoi file).
 2. Su [railway.com](https://railway.com): **New Project → Deploy from GitHub repo** e scegli il repository.
 3. Nello stesso progetto: **+ New → Database → PostgreSQL**.
-4. Apri il servizio dell'app → **Variables** → aggiungi `DATABASE_URL` con valore `${{Postgres.DATABASE_URL}}`.
-5. **Settings → Networking → Generate Domain** per avere il link da condividere.
+4. Nel servizio dell'app → **Variables** → aggiungi `DATABASE_URL` con valore `${{Postgres.DATABASE_URL}}`.
+5. **Settings → Networking → Generate Domain** per avere il link.
 
-Al primo avvio l'app crea le tabelle e genera il calendario. Ogni `git push` ripubblica l'app senza toccare i dati.
+Facoltativo: `VAPID_SUBJECT` = `mailto:tuaemail@esempio.it` (consigliato per le notifiche su iPhone),
+`REMINDER_HOUR` per cambiare l'ora del promemoria (default 23).
 
-## Modificare i turni di base
-Persone, compiti, date e rotazione sono in cima a `server.js`. Il calendario viene generato
-solo se il database è vuoto: per rigenerarlo, svuota le tabelle dal pannello del database su Railway
-(`DROP TABLE swap_requests; DROP TABLE shifts;`, senza toccare la tabella `settings`, altrimenti le notifiche vanno riattivate) e riavvia il servizio.
+## Notifiche
+Dalla scheda "Tu" → **Attiva**. Su iPhone (iOS 16.4+) bisogna prima aggiungere il sito alla schermata Home
+da Safari (Condividi → "Aggiungi alla schermata Home") e aprire l'app da lì.
 
-## In locale
-```bash
-npm install
-DATABASE_URL=postgres://utente:password@localhost:5432/turni npm start
-```
-Poi apri http://localhost:3000
+## Modificare persone, date e rotazione
+Sono in cima a `server.js`. Il calendario dei turni viene generato solo se il database è vuoto.
