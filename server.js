@@ -107,6 +107,19 @@ async function initDb() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS stays (
+      id SERIAL PRIMARY KEY,
+      kind TEXT NOT NULL CHECK (kind IN ('via', 'casa', 'ospiti')),
+      person TEXT NOT NULL,
+      start_day DATE NOT NULL,
+      end_day DATE NOT NULL,
+      start_time TEXT,
+      end_time TEXT,
+      note TEXT,
+      guests INT,
+      created_by TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
     CREATE TABLE IF NOT EXISTS profiles (
       person TEXT PRIMARY KEY,
       color TEXT NOT NULL UNIQUE,
@@ -493,6 +506,89 @@ app.delete('/api/wake', wrap(async (req, res) => {
   res.json({ removed: rowCount });
 }));
 
+// --- Presenze: fuori casa, a casa, ospiti ---
+const STAY_KINDS = { via: { icon: '✈️', label: 'Fuori casa' }, casa: { icon: '🏠', label: 'A casa' }, ospiti: { icon: '👥', label: 'Ospiti' } };
+
+function stayRange(st) {
+  if (st.start_day === st.end_day) {
+    const times = st.start_time && st.end_time ? ` dalle ${st.start_time} alle ${st.end_time}`
+      : st.start_time ? ` dalle ${st.start_time}` : st.end_time ? ` fino alle ${st.end_time}` : '';
+    return `${dayLabel(st.start_day)}${times}`;
+  }
+  return `da ${dayLabel(st.start_day)}${st.start_time ? ` ore ${st.start_time}` : ''} a ${dayLabel(st.end_day)}${st.end_time ? ` ore ${st.end_time}` : ''}`;
+}
+
+function stayText(st) {
+  if (st.kind === 'via') return `${st.person} è fuori casa ${stayRange(st)}.`;
+  if (st.kind === 'casa') return `${st.person} è a casa ${stayRange(st)}.`;
+  const who = st.note ? `${st.note}` : st.guests ? `${st.guests} ${st.guests === 1 ? 'persona' : 'persone'}` : 'Ospiti';
+  return `${who} da ${st.person} ${stayRange(st)}.`;
+}
+
+function readStay(body) {
+  const kind = body.kind;
+  if (!STAY_KINDS[kind]) throw new HttpError(400, 'Scegli il tipo.');
+  if (!isPerson(body.subject)) throw new HttpError(400, 'Persona non valida.');
+  const start_day = body.start_day, end_day = body.end_day || body.start_day;
+  if (!DAY_RE.test(start_day || '') || !DAY_RE.test(end_day || '')) throw new HttpError(400, 'Date non valide.');
+  if (end_day < start_day) throw new HttpError(400, 'La fine non può essere prima dell’inizio.');
+  const start_time = body.start_time || null, end_time = body.end_time || null;
+  if ((start_time && !TIME_RE.test(start_time)) || (end_time && !TIME_RE.test(end_time))) throw new HttpError(400, 'Orario non valido.');
+  if (start_day === end_day && start_time && end_time && end_time <= start_time) throw new HttpError(400, 'L’ora di fine deve essere dopo quella di inizio.');
+  const note = (body.note || '').toString().trim().slice(0, 200) || null;
+  let guests = null;
+  if (kind === 'ospiti' && body.guests !== undefined && body.guests !== null && body.guests !== '') {
+    guests = Number(body.guests);
+    if (!Number.isInteger(guests) || guests < 1 || guests > 50) throw new HttpError(400, 'Numero di ospiti non valido.');
+  }
+  return { kind, person: body.subject, start_day, end_day, start_time, end_time, note, guests };
+}
+
+app.get('/api/stays', wrap(async (req, res) => {
+  const { rows } = await pool.query('SELECT * FROM stays ORDER BY start_day, start_time NULLS FIRST');
+  res.json(rows);
+}));
+
+app.post('/api/stays', wrap(async (req, res) => {
+  const { person } = req.body;
+  if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
+  const st = readStay(req.body);
+  const { rows: [row] } = await pool.query(
+    `INSERT INTO stays (kind, person, start_day, end_day, start_time, end_time, note, guests, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+    [st.kind, st.person, st.start_day, st.end_day, st.start_time, st.end_time, st.note, st.guests, person]
+  );
+  res.status(201).json(row);
+  notifyOthers(person, { title: `${STAY_KINDS[row.kind].icon} ${STAY_KINDS[row.kind].label}`, body: stayText(row), tag: `stay-${row.id}`, url: '/' })
+    .catch((err) => console.error(err));
+}));
+
+app.patch('/api/stays/:id', wrap(async (req, res) => {
+  const { person } = req.body;
+  if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
+  const st = readStay(req.body);
+  const { rows: [row] } = await pool.query(
+    `UPDATE stays SET kind = $1, person = $2, start_day = $3, end_day = $4, start_time = $5, end_time = $6, note = $7, guests = $8
+     WHERE id = $9 RETURNING *`,
+    [st.kind, st.person, st.start_day, st.end_day, st.start_time, st.end_time, st.note, st.guests, req.params.id]
+  );
+  if (!row) throw new HttpError(404, 'Non trovato.');
+  res.json(row);
+  notifyOthers(person, { title: `${STAY_KINDS[row.kind].icon} Modificato da ${person}`, body: stayText(row), tag: `stay-${row.id}`, url: '/' })
+    .catch((err) => console.error(err));
+}));
+
+app.delete('/api/stays/:id', wrap(async (req, res) => {
+  const { person } = req.body;
+  if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
+  const { rows: [row] } = await pool.query('DELETE FROM stays WHERE id = $1 RETURNING *', [req.params.id]);
+  res.json({ ok: true });
+  if (row) {
+    notifyOthers(person, { title: `${STAY_KINDS[row.kind].icon} Annullato da ${person}`, body: stayText(row), tag: `stay-${row.id}`, url: '/' })
+      .catch((err) => console.error(err));
+  }
+}));
+
 // --- Spesa ---
 app.get('/api/shopping', wrap(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM shopping_items ORDER BY done, created_at DESC');
@@ -614,7 +710,11 @@ async function checkReminder() {
   if (!rowCount) return;
   const tomorrow = addDays(today, 1);
   const { rows } = await pool.query('SELECT person FROM wake_times WHERE day = $1', [tomorrow]);
-  const missing = PEOPLE.filter((p) => !rows.some((r) => r.person === p));
+  // chi domani è fuori casa non deve segnare la sveglia
+  const { rows: away } = await pool.query(
+    `SELECT person FROM stays WHERE kind = 'via' AND start_day <= $1 AND end_day >= $1`, [tomorrow]
+  );
+  const missing = PEOPLE.filter((p) => !rows.some((r) => r.person === p) && !away.some((a) => a.person === p));
   for (const person of missing) {
     await notifyPeople([person], {
       title: '⏰ A che ora ti svegli domani?',
