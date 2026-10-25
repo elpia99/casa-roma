@@ -5,15 +5,17 @@ App web per Giulia, Ellen e Claudia: calendario condiviso con turni di pulizia e
 ## Come funziona
 - **Accesso**: ognuna entra con il proprio nome e sceglie un colore. Un colore già scelto da un'altra non si può prendere.
   Il colore si può cambiare in qualsiasi momento dalla scheda "Tu".
-- **Calendario** (stile calendario Apple): in ogni giorno si vedono i turni di pulizia e gli orari di sveglia, con il colore di ognuna.
-  Tocca un giorno per vedere i dettagli sotto il calendario. Si scorre tra i mesi con le frecce o con il dito.
+- **Calendario** (stile calendario Apple): si apre sulla vista **Settimana**, con l'elenco giorno per giorno;
+  con **Mese** si allarga a tutto il mese. In ogni giorno si vedono i turni di pulizia e gli orari di sveglia, con il colore di ognuna.
+  Si scorre con le frecce o con il dito.
 - **Sveglia**: ognuna segna entro le 23:00 a che ora si sveglia il giorno dopo. Alle 23:00 chi non l'ha ancora fatto riceve un promemoria.
   Quando qualcuna segna o cambia l'orario, le altre ricevono una notifica. In grassetto chi va per prima in bagno,
-  quando un'altra si sveglia entro un'ora. L'orario si può ripetere (stesso giorno per 8 settimane, oppure fino a venerdì).
-- **Pulizie**: Bagno e Cucina & corridoio, a rotazione tra le tre, dal 27 ottobre a fine dicembre 2026.
-  Ogni turno parte fisso il martedì. Chi ha il turno può spostarlo in un altro giorno della stessa settimana
-  e può chiedere di cambiare tipo di pulizia: l'altra persona di turno riceve la richiesta e deve accettare.
-- **Spesa**: lista condivisa da spuntare.
+  quando un'altra si sveglia entro un'ora. L'orario si può ripetere ogni settimana per 4 settimane (es. ogni lunedì)
+  oppure su giorni specifici scelti, e si può modificare o eliminare, anche tutta la serie.
+- **Pulizie**: Bagno e Cucina & Corridoio, a rotazione tra le tre, dal 27 ottobre a fine dicembre 2026.
+  Ogni turno parte fisso il martedì. Di ogni turno si può cambiare la data, il tipo di pulizia e la persona assegnata;
+  se si sceglie il tipo o la persona dell'altro turno della settimana, i due turni si scambiano. Le altre ricevono una notifica.
+- **Spesa**: lista condivisa da spuntare; toccando una voce si modificano nome e quantità, o la si elimina.
 
 ## Deploy su Railway
 1. Carica i file su GitHub (la cartella `public` deve esserci con tutti i suoi file).

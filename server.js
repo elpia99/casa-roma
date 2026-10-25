@@ -7,7 +7,7 @@ const webpush = require('web-push');
 // Configurazione dei turni di pulizia
 // ---------------------------------------------------------------------------
 const PEOPLE = ['Giulia', 'Ellen', 'Claudia'];
-const TASKS = { bagno: 'Bagno', cucina: 'Cucina & corridoio' };
+const TASKS = { bagno: 'Bagno', cucina: 'Cucina & Corridoio' };
 const START_DATE = '2026-10-27'; // martedì: ogni turno dura una settimana (mar → lun)
 const END_DATE = '2026-12-31';   // si generano tutte le settimane che iniziano entro questa data
 
@@ -15,6 +15,23 @@ const END_DATE = '2026-12-31';   // si generano tutte le settimane che iniziano 
 // Settimana 1: Giulia bagno, Claudia cucina, Ellen libera.
 const BAGNO_ROTATION = ['Giulia', 'Ellen', 'Claudia'];
 const CUCINA_ROTATION = ['Claudia', 'Giulia', 'Ellen'];
+
+// Colori che si possono scegliere all'accesso (stile calendario Apple); ognuno può averlo una sola persona
+const PALETTE = [
+  { id: 'rosso', name: 'Rosso', hex: '#FF3B30' },
+  { id: 'arancione', name: 'Arancione', hex: '#FF9500' },
+  { id: 'giallo', name: 'Giallo', hex: '#FFCC00' },
+  { id: 'verde', name: 'Verde', hex: '#34C759' },
+  { id: 'menta', name: 'Menta', hex: '#00C7BE' },
+  { id: 'azzurro', name: 'Azzurro', hex: '#32ADE6' },
+  { id: 'blu', name: 'Blu', hex: '#007AFF' },
+  { id: 'viola', name: 'Viola', hex: '#AF52DE' },
+  { id: 'rosa', name: 'Rosa', hex: '#FF2D55' },
+  { id: 'marrone', name: 'Marrone', hex: '#A2845E' },
+];
+
+// Promemoria: chi non ha segnato la sveglia di domani riceve una notifica a quest'ora
+const REMINDER_HOUR = Number(process.env.REMINDER_HOUR) || 23;
 
 const TIME_ZONE = 'Europe/Rome';
 const GIORNI = ['domenica', 'lunedì', 'martedì', 'mercoledì', 'giovedì', 'venerdì', 'sabato'];
@@ -90,23 +107,38 @@ async function initDb() {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS profiles (
+      person TEXT PRIMARY KEY,
+      color TEXT NOT NULL UNIQUE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    -- ogni turno di pulizia ha un giorno: di default il martedì della settimana, poi si può spostare
+    ALTER TABLE shifts ADD COLUMN IF NOT EXISTS day DATE;
+    UPDATE shifts SET day = week_start WHERE day IS NULL;
   `);
   await initPush();
 
-  const { rows } = await pool.query('SELECT COUNT(*)::int AS n FROM shifts');
-  if (rows[0].n > 0) return;
-
+  // Crea le settimane che mancano secondo la rotazione (quelle già presenti, anche se modificate, non si toccano)
   let week = START_DATE;
   let i = 0;
+  let created = 0;
   while (week <= END_DATE) {
-    await pool.query(
-      'INSERT INTO shifts (week_start, task, person) VALUES ($1, $2, $3), ($1, $4, $5)',
-      [week, 'bagno', BAGNO_ROTATION[i % 3], 'cucina', CUCINA_ROTATION[i % 3]]
+    const { rowCount } = await pool.query(
+      `INSERT INTO shifts (week_start, task, person, day) SELECT $1::date, 'bagno', $2, $1::date
+       WHERE NOT EXISTS (SELECT 1 FROM shifts WHERE week_start = $1::date)`,
+      [week, BAGNO_ROTATION[i % 3]]
     );
+    if (rowCount) {
+      await pool.query(
+        `INSERT INTO shifts (week_start, task, person, day) VALUES ($1, 'cucina', $2, $1) ON CONFLICT DO NOTHING`,
+        [week, CUCINA_ROTATION[i % 3]]
+      );
+      created++;
+    }
     week = addDays(week, 7);
     i++;
   }
-  console.log(`Creati i turni per ${i} settimane a partire dal ${START_DATE}.`);
+  if (created) console.log(`Creati i turni per ${created} settimane (${START_DATE} → ${END_DATE}).`);
 }
 
 // ---------------------------------------------------------------------------
@@ -137,7 +169,12 @@ async function initPush() {
 }
 
 async function notifyOthers(person, payload) {
-  const { rows } = await pool.query('SELECT endpoint, data FROM push_subscriptions WHERE person <> $1', [person]);
+  return notifyPeople(PEOPLE.filter((p) => p !== person), payload);
+}
+
+async function notifyPeople(persons, payload) {
+  if (!persons.length) return;
+  const { rows } = await pool.query('SELECT endpoint, data FROM push_subscriptions WHERE person = ANY($1)', [persons]);
   await Promise.all(rows.map(async (r) => {
     try {
       await webpush.sendNotification(r.data, JSON.stringify(payload), { TTL: 12 * 3600 });
@@ -180,20 +217,96 @@ const isPerson = (p) => PEOPLE.includes(p);
 
 app.get('/health', (req, res) => res.send('ok'));
 
-app.get('/api/config', (req, res) => res.json({ people: PEOPLE, tasks: TASKS }));
+app.get('/api/config', (req, res) => res.json({ people: PEOPLE, tasks: TASKS, palette: PALETTE, reminderHour: REMINDER_HOUR }));
+
+// --- Accesso: nome + colore ---
+app.get('/api/profiles', wrap(async (req, res) => {
+  const { rows } = await pool.query('SELECT person, color FROM profiles');
+  res.json(rows);
+}));
+
+app.post('/api/login', wrap(async (req, res) => {
+  const { person, color } = req.body;
+  if (!isPerson(person)) throw new HttpError(400, 'Scegli il tuo nome.');
+  if (!PALETTE.some((c) => c.id === color)) throw new HttpError(400, 'Scegli un colore.');
+  const { rows: [taken] } = await pool.query('SELECT person FROM profiles WHERE color = $1 AND person <> $2', [color, person]);
+  if (taken) throw new HttpError(409, `Questo colore l’ha già scelto ${taken.person}.`);
+  const { rows } = await pool.query(
+    `INSERT INTO profiles (person, color) VALUES ($1, $2)
+     ON CONFLICT (person) DO UPDATE SET color = EXCLUDED.color, updated_at = now() RETURNING person, color`,
+    [person, color]
+  );
+  res.json(rows[0]);
+}));
 
 app.get('/api/shifts', wrap(async (req, res) => {
   const { rows } = await pool.query('SELECT * FROM shifts ORDER BY week_start, task');
   res.json(rows);
 }));
 
-app.patch('/api/shifts/:id/done', wrap(async (req, res) => {
-  const { rows } = await pool.query(
-    'UPDATE shifts SET done = $1 WHERE id = $2 RETURNING *',
-    [Boolean(req.body.done), req.params.id]
-  );
-  if (!rows[0]) throw new HttpError(404, 'Turno non trovato.');
-  res.json(rows[0]);
+// Modifica di un turno: data, tipo di pulizia, persona assegnata, fatto.
+// Tipo e persona restano coerenti con l'altro turno della stessa settimana (ci si scambia).
+app.patch('/api/shifts/:id', wrap(async (req, res) => {
+  const { person, day, task, assignee, done } = req.body;
+  if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
+  const client = await pool.connect();
+  let focus, notice, ids;
+  try {
+    await client.query('BEGIN');
+    const { rows: [s] } = await client.query('SELECT * FROM shifts WHERE id = $1 FOR UPDATE', [req.params.id]);
+    if (!s) throw new HttpError(404, 'Turno non trovato.');
+    const { rows: [o] } = await client.query('SELECT * FROM shifts WHERE week_start = $1 AND id <> $2 FOR UPDATE', [s.week_start, s.id]);
+    focus = s.id;
+    ids = [s.id, o?.id].filter(Boolean);
+
+    if (day !== undefined) {
+      if (!DAY_RE.test(day || '')) throw new HttpError(400, 'Data non valida.');
+      await client.query('UPDATE shifts SET day = $1 WHERE id = $2', [day, s.id]);
+      if (day !== s.day) notice = `${TASKS[s.task]} di ${s.person}: ora ${dayLabel(day)}.`;
+    } else if (task !== undefined) {
+      if (!TASKS[task]) throw new HttpError(400, 'Tipo di pulizia non valido.');
+      if (task !== s.task) {
+        if (o && o.task === task) {
+          // la persona passa all'altro compito della settimana, tenendo il suo giorno
+          await client.query('UPDATE shifts SET person = $1, day = $2, done = false WHERE id = $3', [o.person, o.day, s.id]);
+          await client.query('UPDATE shifts SET person = $1, day = $2, done = false WHERE id = $3', [s.person, s.day, o.id]);
+          focus = o.id;
+          notice = `${s.person} ora fa ${TASKS[task]} e ${o.person} ${TASKS[s.task]} (settimana del ${dayLabel(s.week_start)}).`;
+        } else {
+          await client.query('UPDATE shifts SET task = $1 WHERE id = $2', [task, s.id]);
+          notice = `${s.person} ora fa ${TASKS[task]}.`;
+        }
+      }
+    } else if (assignee !== undefined) {
+      if (!isPerson(assignee)) throw new HttpError(400, 'Persona non valida.');
+      if (assignee !== s.person) {
+        await client.query('UPDATE shifts SET person = $1, done = false WHERE id = $2', [assignee, s.id]);
+        if (o && o.person === assignee) {
+          await client.query('UPDATE shifts SET person = $1, done = false WHERE id = $2', [s.person, o.id]);
+          notice = `${TASKS[s.task]}: ora tocca a ${assignee}, ${TASKS[o.task]} a ${s.person} (${dayLabel(s.week_start)}).`;
+        } else {
+          notice = `${TASKS[s.task]} (${dayLabel(s.day)}): ora tocca a ${assignee} invece di ${s.person}.`;
+        }
+      }
+    } else if (done !== undefined) {
+      await client.query('UPDATE shifts SET done = $1 WHERE id = $2', [Boolean(done), s.id]);
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+
+  const { rows } = await pool.query('SELECT * FROM shifts WHERE id = ANY($1)', [ids]);
+  res.json({ shifts: rows, focus });
+
+  if (notice) {
+    notifyOthers(person, { title: `🧽 ${person} ha modificato un turno`, body: notice, tag: `shift-${focus}`, url: '/' })
+      .catch((err) => console.error(err));
+  }
 }));
 
 app.get('/api/requests', wrap(async (req, res) => {
@@ -225,6 +338,12 @@ app.post('/api/requests', wrap(async (req, res) => {
      (message || '').toString().slice(0, 300) || null]
   );
   res.status(201).json(rows[0]);
+
+  notifyPeople([to_person], {
+    title: `🔄 ${from_person} ti chiede uno scambio`,
+    body: `Tu faresti ${TASKS[a.task]} e lei ${TASKS[b.task]} (settimana del ${dayLabel(a.week_start)}).`,
+    tag: `req-${rows[0].id}`, url: '/',
+  }).catch((err) => console.error(err));
 }));
 
 async function resolveRequest(id, person, action) {
@@ -253,9 +372,13 @@ async function resolveRequest(id, person, action) {
         await client.query('COMMIT');
         throw new HttpError(409, 'I turni sono cambiati nel frattempo: la richiesta non è più valida.');
       }
-      await client.query('UPDATE shifts SET person = $1, done = false WHERE id = $2', [r.to_person, a.id]);
-      if (r.kind === 'scambio') {
-        await client.query('UPDATE shifts SET person = $1, done = false WHERE id = $2', [r.from_person, b.id]);
+      // Nella stessa settimana ognuna si tiene il giorno che aveva scelto
+      const sameWeek = b && a.week_start === b.week_start;
+      await client.query('UPDATE shifts SET person = $1, day = $2, done = false WHERE id = $3',
+        [r.to_person, sameWeek ? b.day : a.day, a.id]);
+      if (b) {
+        await client.query('UPDATE shifts SET person = $1, day = $2, done = false WHERE id = $3',
+          [r.from_person, sameWeek ? a.day : b.day, b.id]);
       }
       await client.query(`UPDATE swap_requests SET status = 'accettata', resolved_at = now() WHERE id = $1`, [id]);
       // Le altre richieste in attesa sugli stessi turni non hanno più senso
@@ -266,6 +389,13 @@ async function resolveRequest(id, person, action) {
       );
     }
     await client.query('COMMIT');
+    if (action === 'accept' || action === 'reject') {
+      notifyPeople([r.from_person], {
+        title: action === 'accept' ? `✅ ${r.to_person} ha accettato lo scambio` : `${r.to_person} ha rifiutato lo scambio`,
+        body: action === 'accept' ? 'Il calendario è già aggiornato.' : 'Il turno resta com’era.',
+        tag: `req-${r.id}`, url: '/',
+      }).catch((err) => console.error(err));
+    }
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     throw err;
@@ -316,7 +446,7 @@ app.put('/api/wake/bulk', wrap(async (req, res) => {
   const { person, time } = req.body;
   const days = [...new Set(Array.isArray(req.body.days) ? req.body.days : [])].sort();
   if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
-  if (!days.length || days.length > 70 || !days.every((d) => DAY_RE.test(d))) throw new HttpError(400, 'Giorni non validi.');
+  if (!days.length || days.length > 100 || !days.every((d) => DAY_RE.test(d))) throw new HttpError(400, 'Giorni non validi.');
   if (!TIME_RE.test(time || '')) throw new HttpError(400, 'Orario non valido: usa il formato 07:30.');
 
   const { rows: prev } = await pool.query(
@@ -345,10 +475,13 @@ app.put('/api/wake/bulk', wrap(async (req, res) => {
 }));
 
 app.delete('/api/wake', wrap(async (req, res) => {
-  const { person, day } = req.body;
-  if (!isPerson(person) || !DAY_RE.test(day || '')) throw new HttpError(400, 'Richiesta non valida.');
-  await pool.query('DELETE FROM wake_times WHERE person = $1 AND day = $2', [person, day]);
-  res.json({ ok: true });
+  const { person } = req.body;
+  const days = Array.isArray(req.body.days) ? req.body.days : [req.body.day];
+  if (!isPerson(person) || !days.length || days.length > 100 || !days.every((d) => DAY_RE.test(d || ''))) {
+    throw new HttpError(400, 'Richiesta non valida.');
+  }
+  const { rowCount } = await pool.query('DELETE FROM wake_times WHERE person = $1 AND day = ANY($2::date[])', [person, days]);
+  res.json({ removed: rowCount });
 }));
 
 // --- Spesa ---
@@ -385,6 +518,28 @@ app.post('/api/shopping', wrap(async (req, res) => {
 app.patch('/api/shopping/:id', wrap(async (req, res) => {
   const { person, done } = req.body;
   if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
+
+  // modifica di nome e/o quantità
+  if (req.body.name !== undefined || req.body.qty !== undefined) {
+    const name = req.body.name !== undefined ? String(req.body.name).trim().slice(0, 80) : null;
+    if (req.body.name !== undefined && !name) throw new HttpError(400, 'Il nome non può essere vuoto.');
+    if (name) {
+      const { rows: [dup] } = await pool.query(
+        'SELECT name FROM shopping_items WHERE lower(name) = lower($1) AND id <> $2 AND NOT done', [name, req.params.id]
+      );
+      if (dup) throw new HttpError(409, `${dup.name} è già nella lista.`);
+    }
+    const qtySet = req.body.qty !== undefined;
+    const qty = qtySet ? (String(req.body.qty || '').trim().slice(0, 30) || null) : null;
+    const { rows } = await pool.query(
+      `UPDATE shopping_items SET name = COALESCE($1, name), qty = CASE WHEN $2 THEN $3 ELSE qty END
+       WHERE id = $4 RETURNING *`,
+      [name, qtySet, qty, req.params.id]
+    );
+    if (!rows[0]) throw new HttpError(404, 'Questa voce non c’è più.');
+    return res.json(rows[0]);
+  }
+
   const { rows } = await pool.query(
     `UPDATE shopping_items SET done = $1, done_by = CASE WHEN $1 THEN $2 ELSE NULL END,
        done_at = CASE WHEN $1 THEN now() ELSE NULL END
@@ -435,7 +590,37 @@ app.post('/api/push/test', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ---------------------------------------------------------------------------
+// Promemoria delle 23: chi non ha segnato la sveglia di domani riceve una notifica
+// ---------------------------------------------------------------------------
+async function checkReminder() {
+  const hour = Number(new Date().toLocaleString('en-GB', { timeZone: TIME_ZONE, hour: '2-digit', hourCycle: 'h23' }));
+  if (hour !== REMINDER_HOUR) return;
+  const today = romeToday();
+  const key = `reminder:${today}`;
+  // segna l'invio prima di farlo, così non parte due volte
+  const { rowCount } = await pool.query(
+    'INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING', [key, new Date().toISOString()]
+  );
+  if (!rowCount) return;
+  const tomorrow = addDays(today, 1);
+  const { rows } = await pool.query('SELECT person FROM wake_times WHERE day = $1', [tomorrow]);
+  const missing = PEOPLE.filter((p) => !rows.some((r) => r.person === p));
+  for (const person of missing) {
+    await notifyPeople([person], {
+      title: '⏰ A che ora ti svegli domani?',
+      body: `Non hai ancora segnato la sveglia per ${dayLabel(tomorrow)}.`,
+      tag: `reminder-${tomorrow}`, url: '/',
+    });
+  }
+  if (missing.length) console.log(`Promemoria sveglia inviato a: ${missing.join(', ')}`);
+}
+
 const PORT = process.env.PORT || 3000;
 initDb()
-  .then(() => app.listen(PORT, () => console.log(`Turni di casa in ascolto sulla porta ${PORT}`)))
+  .then(() => {
+    app.listen(PORT, () => console.log(`Turni di casa in ascolto sulla porta ${PORT}`));
+    setInterval(() => checkReminder().catch((err) => console.error('Promemoria:', err)), 60 * 1000);
+    checkReminder().catch((err) => console.error('Promemoria:', err));
+  })
   .catch((err) => { console.error('Errore di avvio:', err); process.exit(1); });
