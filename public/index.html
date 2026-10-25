@@ -135,6 +135,27 @@
   button.ev { border: 0; background: none; font-family: inherit; color: inherit; text-align: left; width: 100%; cursor: pointer; line-height: 1.2; }
   button.ev.pill { background: color-mix(in srgb, var(--c) 22%, transparent); }
   .ev.add { color: var(--blue); background: var(--fill) !important; text-align: center !important; font-weight: 600; border-radius: 5px; }
+  .wlabel { display: none; }
+  .wevs { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .ev .l { display: none; }
+  @media (max-width: 639px) {
+    .whead { display: none; }
+    .wgrid { grid-template-columns: 1fr; border-top: .5px solid var(--sep); }
+    .wcell { min-height: 0; border-left: 0; border-bottom: .5px solid var(--sep); flex-direction: row; align-items: flex-start; gap: 10px; padding: 8px 2px; }
+    .wcell:last-child { border-bottom: 0; }
+    .wcell.today { border-radius: 10px; }
+    .wlabel { display: grid; justify-items: center; gap: 1px; width: 44px; flex: none; }
+    .wlabel .g { font-size: 11px; color: var(--label2); text-transform: uppercase; }
+    .wlabel .n { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 17px; }
+    .wcell.today .wlabel .n { background: var(--red); color: #fff; font-weight: 600; }
+    .wevs { flex-direction: row; flex-wrap: wrap; flex: 1; gap: 6px; padding-top: 3px; }
+    .wcell .ev { width: auto; font-size: 14px; padding: 5px 9px; border-radius: 8px; white-space: normal; }
+    .wcell .ev.wake { background: var(--fill); padding: 5px 9px 5px 7px; gap: 5px; }
+    .wcell .ev.wake::before { width: 8px; height: 8px; }
+    .wcell .ev .l { display: inline; }
+    .wcell .ev .s { display: none; }
+    .wcell .ev.add { min-width: 36px; }
+  }
   .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--label2); margin: 12px 2px 0; }
   .cal-legend .chip { display: inline-flex; align-items: center; gap: 5px; }
   .cal-legend .chip::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
@@ -483,17 +504,17 @@ function renderCalendario() {
 function dayEvents(d, withAdd) {
   const t = today();
   const shifts = shiftsOn(d).map((s) => `<button class="ev pill ${s.done ? 'done' : ''}" style="--c:${colorOf(s.person)}" data-shift="${s.id}"
-      aria-label="${state.tasks[s.task]}, ${s.person}">${taskShort(s.task)}</button>`).join('');
+      aria-label="${state.tasks[s.task]}, ${s.person}"><span class="s">${taskShort(s.task)}</span><span class="l">${state.tasks[s.task]} · ${s.person}</span></button>`).join('');
   const wakes = state.people.map((p) => ({ p, v: wakeOf(p, d) })).filter((x) => x.v).sort((a, b) => a.v.localeCompare(b.v))
     .map(({ p, v }) => {
       const cls = 'ev wake';
       const label = `Sveglia ${p} ${v}`;
       return p === state.me && d >= t
-        ? `<button class="${cls}" style="--c:${colorOf(p)}" data-wake="${d}" aria-label="${label}, modifica">${shortTime(v)}</button>`
-        : `<span class="${cls}" style="--c:${colorOf(p)}" aria-label="${label}">${shortTime(v)}</span>`;
+        ? `<button class="${cls}" style="--c:${colorOf(p)}" data-wake="${d}" aria-label="${label}, modifica">${shortTime(v)}<span class="l">${p === state.me ? 'Tu' : p}</span></button>`
+        : `<span class="${cls}" style="--c:${colorOf(p)}" aria-label="${label}">${shortTime(v)}<span class="l">${p}</span></span>`;
     }).join('');
   const add = withAdd && d >= t && !wakeOf(state.me, d)
-    ? `<button class="ev add" data-wake="${d}" aria-label="Aggiungi la tua sveglia per ${dayName(d)}">+</button>` : '';
+    ? `<button class="ev add" data-wake="${d}" aria-label="Aggiungi la tua sveglia per ${dayName(d)}">+<span class="l"> Sveglia</span></button>` : '';
   return shifts + wakes + add;
 }
 
@@ -506,7 +527,9 @@ function renderWeek() {
   const t = today();
   const days = Array.from({ length: 7 }, (_, i) => addDays(state.week, i));
   const head = days.map((d) => `<div class="${d === t ? 'today' : ''}"><span class="g">${GIORNI[parse(d).getDay()]}</span><span class="n">${parse(d).getDate()}</span></div>`).join('');
-  const cells = days.map((d) => `<div class="wcell ${d === t ? 'today' : ''} ${d < t ? 'past' : ''}" aria-label="${dayName(d)}">${dayEvents(d, true)}</div>`).join('');
+  const cells = days.map((d) => `<div class="wcell ${d === t ? 'today' : ''} ${d < t ? 'past' : ''}" aria-label="${dayName(d)}">
+    <div class="wlabel"><span class="g">${GIORNI[parse(d).getDay()]}</span><span class="n">${parse(d).getDate()}</span></div>
+    <div class="wevs">${dayEvents(d, true)}</div></div>`).join('');
   return `<div class="whead">${head}</div><div class="wgrid" id="grid">${cells}</div>${legend()}`;
 }
 
