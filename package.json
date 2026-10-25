@@ -1,0 +1,17 @@
+{
+  "name": "turni-casa",
+  "version": "1.0.0",
+  "description": "Gestione dei turni di casa: pulizie a rotazione e orari di sveglia con notifiche",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "4.21.2",
+    "pg": "8.13.1",
+    "web-push": "3.6.7"
+  }
+}
