@@ -121,6 +121,25 @@
   .wstrip .sel.today .n { background: var(--red); color: #fff; }
   .wstrip .dots { display: flex; gap: 2px; height: 6px; }
   .wstrip .dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--c); }
+  .whead { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: .5px solid var(--sep); padding: 2px 0 6px; touch-action: pan-y; }
+  .whead div { display: grid; justify-items: center; gap: 2px; }
+  .whead .g { font-size: 11px; color: var(--label2); text-transform: uppercase; }
+  .whead .n { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 17px; }
+  .whead .today .n { background: var(--red); color: #fff; font-weight: 600; }
+  .wgrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-bottom: .5px solid var(--sep); touch-action: pan-y; }
+  .wcell { min-height: max(340px, calc(100vh - 380px)); border-left: .5px solid var(--sep); padding: 5px 2px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .wcell:first-child { border-left: 0; }
+  .wcell.today { background: color-mix(in srgb, var(--red) 6%, transparent); }
+  .wcell.past > * { opacity: .5; }
+  .wcell .ev { font-size: 12px; padding: 3px 3px; }
+  .wcell .ev.wake { padding: 2px 2px; }
+  button.ev { border: 0; background: none; font-family: inherit; color: inherit; text-align: left; width: 100%; cursor: pointer; line-height: 1.2; }
+  button.ev.pill { background: color-mix(in srgb, var(--c) 22%, transparent); }
+  .ev.add { color: var(--blue); background: var(--fill) !important; text-align: center !important; font-weight: 600; border-radius: 5px; }
+  .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--label2); margin: 12px 2px 0; }
+  .cal-legend .chip { display: inline-flex; align-items: center; gap: 5px; }
+  .cal-legend .chip::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
+  div.cell { cursor: pointer; }
   .wday { margin-top: 18px; scroll-margin-top: 120px; }
   .wday-head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 2px 7px; }
   .wday-head h3 { font-size: 17px; font-weight: 600; margin: 0; }
@@ -465,50 +484,50 @@ function renderCalendario() {
   </main>`;
 }
 
+// eventi di un giorno, cliccabili direttamente nel calendario
+function dayEvents(d, withAdd) {
+  const t = today();
+  const first = firstInBathroom(d);
+  const shifts = shiftsOn(d).map((s) => `<button class="ev pill ${s.done ? 'done' : ''}" style="--c:${colorOf(s.person)}" data-shift="${s.id}"
+      aria-label="${state.tasks[s.task]}, ${s.person}">${taskShort(s.task)}</button>`).join('');
+  const wakes = state.people.map((p) => ({ p, v: wakeOf(p, d) })).filter((x) => x.v).sort((a, b) => a.v.localeCompare(b.v))
+    .map(({ p, v }) => {
+      const cls = `ev wake ${v === first ? 'first' : ''}`;
+      const label = `Sveglia ${p} ${v}`;
+      return p === state.me && d >= t
+        ? `<button class="${cls}" style="--c:${colorOf(p)}" data-wake="${d}" aria-label="${label}, modifica">${shortTime(v)}</button>`
+        : `<span class="${cls}" style="--c:${colorOf(p)}" aria-label="${label}">${shortTime(v)}</span>`;
+    }).join('');
+  const add = withAdd && d >= t && !wakeOf(state.me, d)
+    ? `<button class="ev add" data-wake="${d}" aria-label="Aggiungi la tua sveglia per ${dayName(d)}">+</button>` : '';
+  return shifts + wakes + add;
+}
+
+function legend() {
+  return `<div class="cal-legend">${state.people.map((p) => `<span class="chip" style="--c:${colorOf(p)}">${p}</span>`).join('')}
+    <span>Tocca un turno o la tua sveglia per modificarli · in grassetto chi va prima in bagno</span></div>`;
+}
+
 function renderWeek() {
-  const t = today(), sel = state.day;
+  const t = today();
   const days = Array.from({ length: 7 }, (_, i) => addDays(state.week, i));
-  const strip = days.map((d) => {
-    const dots = [...shiftsOn(d).map((s) => colorOf(s.person)), ...state.people.filter((p) => wakeOf(p, d)).map(colorOf)].slice(0, 5)
-      .map((c) => `<i style="--c:${c}"></i>`).join('');
-    const cls = [d === t && 'today', d === sel && 'sel'].filter(Boolean).join(' ');
-    return `<button class="${cls}" data-day="${d}" aria-label="${dayName(d)}"><span class="g">${GIORNI[parse(d).getDay()].slice(0, 1)}</span>
-      <span class="n">${parse(d).getDate()}</span><span class="dots">${dots}</span></button>`;
-  }).join('');
-  const sections = days.map((d) => {
-    const rows = dayRows(d, false);
-    const canAdd = d >= t && !wakeOf(state.me, d);
-    const when = d === t ? ' · Oggi' : d === addDays(t, 1) ? ' · Domani' : '';
-    return `<section class="wday ${d < t ? 'past' : ''} ${d === t ? 'is-today' : ''}" id="d-${d}">
-      <div class="wday-head"><h3>${cap(GIORNI_LUNGHI[parse(d).getDay()])} ${parse(d).getDate()} <span class="muted">${MESI[parse(d).getMonth()]}${when}</span></h3>
-        ${canAdd ? `<button class="mini-add" data-wake="${d}">+ Sveglia</button>` : ''}</div>
-      <div class="rows">${rows || '<p class="empty">Niente in programma.</p>'}</div>
-    </section>`;
-  }).join('');
-  return `<div class="wstrip" id="grid">${strip}</div>${sections}`;
+  const head = days.map((d) => `<div class="${d === t ? 'today' : ''}"><span class="g">${GIORNI[parse(d).getDay()]}</span><span class="n">${parse(d).getDate()}</span></div>`).join('');
+  const cells = days.map((d) => `<div class="wcell ${d === t ? 'today' : ''} ${d < t ? 'past' : ''}" aria-label="${dayName(d)}">${dayEvents(d, true)}</div>`).join('');
+  return `<div class="whead">${head}</div><div class="wgrid" id="grid">${cells}</div>${legend()}`;
 }
 
 function renderMonth() {
-  const t = today(), m = state.month, sel = state.day, monthIdx = parse(m).getMonth();
+  const t = today(), m = state.month, monthIdx = parse(m).getMonth();
   const start = mondayOf(m);
   const end = addDays(mondayOf(addDays(addMonths(m, 1), -1)), 6);
   let cells = '';
   for (let d = start; d <= end; d = addDays(d, 1)) {
     const dow = parse(d).getDay();
-    const first = firstInBathroom(d);
-    const cls = ['cell', d === t && 'today', d === sel && 'sel', parse(d).getMonth() !== monthIdx && 'out', (dow === 0 || dow === 6) && 'we'].filter(Boolean).join(' ');
-    const wakes = state.people.map((p) => ({ p, v: wakeOf(p, d) })).filter((x) => x.v).sort((a, b) => a.v.localeCompare(b.v))
-      .map((x) => `<span class="ev wake ${x.v === first ? 'first' : ''}" style="--c:${colorOf(x.p)}">${shortTime(x.v)}</span>`).join('');
-    const shifts = shiftsOn(d).map((s) => `<span class="ev pill ${s.done ? 'done' : ''}" style="--c:${colorOf(s.person)}">${taskShort(s.task)}</span>`).join('');
-    cells += `<button class="${cls}" data-day="${d}" aria-label="${dayName(d)}" aria-pressed="${d === sel}"><span class="n">${parse(d).getDate()}</span>${shifts}${wakes}</button>`;
+    const cls = ['cell', d === t && 'today', parse(d).getMonth() !== monthIdx && 'out', (dow === 0 || dow === 6) && 'we'].filter(Boolean).join(' ');
+    cells += `<div class="${cls}" data-day="${d}" aria-label="${dayName(d)}"><span class="n">${parse(d).getDate()}</span>${dayEvents(d, false)}</div>`;
   }
-  const when = sel === t ? 'Oggi' : sel === addDays(t, 1) ? 'Domani' : '';
   return `<div class="dows">${['L', 'M', 'M', 'G', 'V', 'S', 'D'].map((g, i) => `<span class="${i > 4 ? 'we' : ''}">${g}</span>`).join('')}</div>
-    <div class="grid" id="grid">${cells}</div>
-    <section class="agenda">
-      <h2>${cap(dayName(sel))}${when ? ` <span class="muted">· ${when}</span>` : ''}</h2>
-      <div class="rows">${dayRows(sel, true) || '<p class="empty">Nessun evento.</p>'}</div>
-    </section>`;
+    <div class="grid" id="grid">${cells}</div>${legend()}`;
 }
 
 // righe di un giorno: turni di pulizia e sveglie
@@ -913,13 +932,16 @@ $('#root').addEventListener('click', async (e) => {
 
   // calendario
   const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+  if ((b = el('[data-wake]'))) return openWake(b.dataset.wake);
+  if ((b = el('[data-shift]'))) return openShift(Number(b.dataset.shift));
   if ((b = el('[data-day]'))) {
     state.day = b.dataset.day;
     state.week = mondayOf(state.day);
-    if (firstOfMonth(state.day) !== state.month) state.month = firstOfMonth(state.day);
+    state.month = firstOfMonth(state.day);
+    state.view = 'week';
+    try { localStorage.setItem('turni-view', 'week'); } catch {}
     render();
-    if (state.view === 'week') $(`#d-${state.day}`)?.scrollIntoView({ block: 'start', behavior: smooth });
-    else $('.agenda')?.scrollIntoView({ block: 'nearest', behavior: smooth });
+    window.scrollTo({ top: 0, behavior: smooth });
     return;
   }
   if ((b = el('[data-step]'))) return step(Number(b.dataset.step));
