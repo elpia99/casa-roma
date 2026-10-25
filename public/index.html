@@ -911,9 +911,15 @@ async function disablePush() {
 // ---------------------------------------------------------------------------
 async function load() {
   try {
-    const [profiles, shifts, requests, wake, items] = await Promise.all([
+    const [profiles, shifts, requests, wake, items, ver] = await Promise.all([
       api('/api/profiles'), api('/api/shifts'), api('/api/requests'), api('/api/wake'), api('/api/shopping'),
+      api('/api/version').catch(() => ({})),
     ]);
+    // se è uscita una versione nuova dell'app, ricarica la pagina
+    if (ver.version) {
+      if (state.version && state.version !== ver.version) { location.reload(); return; }
+      state.version = ver.version;
+    }
     Object.assign(state, { profiles, shifts, requests, wake, items });
     render();
     if (state.sheet?.type === 'shift') openShift(state.sheet.id);
