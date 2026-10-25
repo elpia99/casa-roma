@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Turni di casa</title>
+<title>Casa Roma</title>
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Turni">
+<meta name="apple-mobile-web-app-title" content="Casa Roma">
 <style>
   :root {
     color-scheme: light;
@@ -103,7 +103,6 @@
   .ev.pill.done { text-decoration: line-through; opacity: .6; }
   .ev.wake { display: flex; align-items: center; gap: 2px; padding: 0 2px; color: var(--label); }
   .ev.wake::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); flex: none; }
-  .ev.wake.first { font-weight: 700; }
   @media (min-width: 640px) {
     .cell { min-height: 104px; padding: 6px 3px; }
     .cell .n { align-self: flex-end; font-size: 16px; }
@@ -332,10 +331,6 @@ const takenBy = (colorId) => state.profiles.find((p) => p.color === colorId)?.pe
 const wakeOf = (person, day) => state.wake.find((w) => w.person === person && w.day === day)?.time || '';
 const shiftsOn = (day) => state.shifts.filter((s) => s.day === day).sort((a, b) => a.task.localeCompare(b.task));
 const shiftById = (id) => state.shifts.find((s) => s.id === id);
-function firstInBathroom(day) {
-  const times = state.people.map((p) => wakeOf(p, day)).filter(Boolean).sort();
-  return times.length > 1 && mins(times[1]) - mins(times[0]) <= 60 ? times[0] : null;
-}
 const pendingFor = (shiftId) => state.requests.find((r) => r.status === 'in_attesa' && (r.from_shift_id === shiftId || r.to_shift_id === shiftId));
 const taskShort = (task) => (task === 'bagno' ? 'Bagno' : 'Cucina');
 
@@ -377,7 +372,7 @@ function renderLogin() {
   const owner = L.color && takenBy(L.color);
 
   $('#root').innerHTML = `<main class="login">
-    <h1>Turni di casa</h1>
+    <h1>Casa Roma</h1>
     <p class="lead">Entra con il tuo nome e scegli il tuo colore: è quello con cui ti vedranno le altre nel calendario.</p>
 
     <p class="section-title">Chi sei</p>
@@ -487,12 +482,11 @@ function renderCalendario() {
 // eventi di un giorno, cliccabili direttamente nel calendario
 function dayEvents(d, withAdd) {
   const t = today();
-  const first = firstInBathroom(d);
   const shifts = shiftsOn(d).map((s) => `<button class="ev pill ${s.done ? 'done' : ''}" style="--c:${colorOf(s.person)}" data-shift="${s.id}"
       aria-label="${state.tasks[s.task]}, ${s.person}">${taskShort(s.task)}</button>`).join('');
   const wakes = state.people.map((p) => ({ p, v: wakeOf(p, d) })).filter((x) => x.v).sort((a, b) => a.v.localeCompare(b.v))
     .map(({ p, v }) => {
-      const cls = `ev wake ${v === first ? 'first' : ''}`;
+      const cls = 'ev wake';
       const label = `Sveglia ${p} ${v}`;
       return p === state.me && d >= t
         ? `<button class="${cls}" style="--c:${colorOf(p)}" data-wake="${d}" aria-label="${label}, modifica">${shortTime(v)}</button>`
@@ -505,7 +499,7 @@ function dayEvents(d, withAdd) {
 
 function legend() {
   return `<div class="cal-legend">${state.people.map((p) => `<span class="chip" style="--c:${colorOf(p)}">${p}</span>`).join('')}
-    <span>Tocca un turno o la tua sveglia per modificarli · in grassetto chi va prima in bagno</span></div>`;
+    <span>Tocca un turno o la tua sveglia per modificarli</span></div>`;
 }
 
 function renderWeek() {
@@ -533,7 +527,6 @@ function renderMonth() {
 // righe di un giorno: turni di pulizia e sveglie
 function dayRows(d, withAdd) {
   const t = today();
-  const first = firstInBathroom(d);
   let rows = '';
   for (const s of shiftsOn(d)) {
     const sub = [s.person === state.me ? 'Tu' : s.person, s.done ? 'fatto ✓' : ''].filter(Boolean).join(' · ');
@@ -548,11 +541,11 @@ function dayRows(d, withAdd) {
     const mine = p === state.me;
     const editable = mine && d >= t;
     const tag = editable ? 'button' : 'div';
-    const sub = [v === first ? 'Prima in bagno' : '', editable ? 'Tocca per modificare o eliminare' : ''].filter(Boolean).join(' · ');
+    const sub = editable ? 'Tocca per modificare o eliminare' : '';
     rows += `<${tag} class="row" ${editable ? `data-wake="${d}"` : ''}>
       <span class="bar" style="--c:${colorOf(p)}"></span>
       <span class="main"><span class="title">⏰ ${mine ? 'La tua sveglia' : `Sveglia ${esc(p)}`}</span>${sub ? `<span class="sub" style="display:block">${sub}</span>` : ''}</span>
-      <span class="right ${v === first ? 'strong' : ''}">${v}</span>
+      <span class="right">${v}</span>
       ${editable ? '<span class="chev" aria-hidden="true">›</span>' : ''}
     </${tag}>`;
   }

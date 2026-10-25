@@ -6,7 +6,7 @@ self.addEventListener('push', (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data && event.data.text() }; }
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Turni di casa', {
+    self.registration.showNotification(data.title || 'Casa Roma', {
       body: data.body || '',
       tag: data.tag,
       icon: '/icon-192.png',
