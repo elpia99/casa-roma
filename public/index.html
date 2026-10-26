@@ -156,6 +156,13 @@
     .wcell .ev .s { display: none; }
     .wcell .ev.add { min-width: 36px; }
   }
+  .ev.stay { border: 1px dashed var(--c); color: color-mix(in srgb, var(--c) 62%, var(--label)); border-radius: 4px; font-weight: 600; }
+  button.ev.stay { background: transparent; }
+  .wcell .ev.stay { border-radius: 8px; }
+  .cal-top .nav .plus { font-size: 30px; font-weight: 300; padding: 0 6px 0 12px; }
+  .stay-grid { display: grid; grid-template-columns: auto 1fr auto; gap: 8px 10px; align-items: center; padding: 10px 16px; }
+  .stay-grid label { color: var(--label); }
+  .stay-grid input { border: 0; background: var(--fill); border-radius: 8px; padding: 6px 8px; font-size: 16px; min-width: 0; }
   .cal-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--label2); margin: 12px 2px 0; }
   .cal-legend .chip { display: inline-flex; align-items: center; gap: 5px; }
   .cal-legend .chip::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--c); }
@@ -300,7 +307,7 @@ const SCREENS = ['calendario', 'spesa', 'profilo'];
 
 const state = {
   people: [], tasks: {}, palette: [], reminderHour: 23,
-  profiles: [], shifts: [], requests: [], wake: [], items: [],
+  profiles: [], shifts: [], requests: [], wake: [], items: [], stays: [],
   me: '', screen: 'calendario', view: 'week', week: null, month: null, day: null, push: 'unknown',
   login: { person: '', color: '' }, sheet: null,
 };
@@ -354,6 +361,17 @@ const shiftsOn = (day) => state.shifts.filter((s) => s.day === day).sort((a, b) 
 const shiftById = (id) => state.shifts.find((s) => s.id === id);
 const pendingFor = (shiftId) => state.requests.find((r) => r.status === 'in_attesa' && (r.from_shift_id === shiftId || r.to_shift_id === shiftId));
 const taskShort = (task) => (task === 'bagno' ? 'Bagno' : 'Cucina');
+const STAY = { via: { icon: '✈️', label: 'Fuori casa', short: 'Via' }, casa: { icon: '🏠', label: 'A casa', short: 'Casa' }, ospiti: { icon: '👥', label: 'Ospiti', short: 'Ospiti' } };
+const staysOn = (day) => state.stays.filter((x) => x.start_day <= day && day <= x.end_day);
+const isAway = (person, day) => staysOn(day).some((x) => x.kind === 'via' && x.person === person);
+function stayWhen(x) {
+  if (x.start_day === x.end_day) {
+    const t = x.start_time && x.end_time ? `${x.start_time}–${x.end_time}` : x.start_time ? `dalle ${x.start_time}` : x.end_time ? `fino alle ${x.end_time}` : '';
+    return t;
+  }
+  const a = parse(x.start_day), b = parse(x.end_day);
+  return `${a.getDate()} ${MESI[a.getMonth()]}${x.start_time ? ` ${x.start_time}` : ''} → ${b.getDate()} ${MESI[b.getMonth()]}${x.end_time ? ` ${x.end_time}` : ''}`;
+}
 
 // ---------------------------------------------------------------------------
 // Navigazione
@@ -448,7 +466,7 @@ async function doLogin() {
 function renderBanners() {
   const tom = addDays(today(), 1);
   let html = '';
-  if (!wakeOf(state.me, tom)) {
+  if (!wakeOf(state.me, tom) && !isAway(state.me, tom)) {
     html += `<div class="banner"><span class="icon" aria-hidden="true">⏰</span>
       <span class="text"><b>A che ora ti svegli domani?</b>Va segnata entro le ${state.reminderHour}:00, se no arriva un promemoria.</span>
       <span class="acts"><button class="chipbtn solid" data-wake="${tom}">Segna</button></span></div>`;
@@ -489,6 +507,7 @@ function renderCalendario() {
         <button class="arrow" data-step="-1" aria-label="${isWeek ? 'Settimana precedente' : 'Mese precedente'}">‹</button>
         <button class="link" data-today>Oggi</button>
         <button class="arrow" data-step="1" aria-label="${isWeek ? 'Settimana successiva' : 'Mese successivo'}">›</button>
+        <button class="arrow plus" data-new-stay aria-label="Aggiungi: fuori casa, a casa, ospiti">+</button>
       </div>
     </header>
     <div class="viewseg"><div class="seg" role="group" aria-label="Vista">
@@ -513,14 +532,21 @@ function dayEvents(d, withAdd) {
         ? `<button class="${cls}" style="--c:${colorOf(p)}" data-wake="${d}" aria-label="${label}, modifica">${shortTime(v)}<span class="l">${p === state.me ? 'Tu' : p}</span></button>`
         : `<span class="${cls}" style="--c:${colorOf(p)}" aria-label="${label}">${shortTime(v)}<span class="l">${p}</span></span>`;
     }).join('');
-  const add = withAdd && d >= t && !wakeOf(state.me, d)
+  const stays = staysOn(d).map((x) => {
+    const k = STAY[x.kind];
+    const who = x.kind === 'ospiti' ? [x.note || (x.guests ? `${x.guests} pers.` : ''), `da ${x.person}`].filter(Boolean).join(' ') : x.person;
+    const when = stayWhen(x);
+    return `<button class="ev stay" style="--c:${colorOf(x.person)}" data-stay="${x.id}" aria-label="${k.label}, ${esc(who)}${when ? `, ${when}` : ''}">
+      <span class="s">${k.icon} ${k.short}</span><span class="l">${k.icon} ${k.label} · ${esc(who)}${when ? ` · ${when}` : ''}</span></button>`;
+  }).join('');
+  const add = withAdd && d >= t && !wakeOf(state.me, d) && !isAway(state.me, d)
     ? `<button class="ev add" data-wake="${d}" aria-label="Aggiungi la tua sveglia per ${dayName(d)}">+<span class="l"> Sveglia</span></button>` : '';
-  return shifts + wakes + add;
+  return stays + shifts + wakes + add;
 }
 
 function legend() {
   return `<div class="cal-legend">${state.people.map((p) => `<span class="chip" style="--c:${colorOf(p)}">${p}</span>`).join('')}
-    <span>Tocca un turno o la tua sveglia per modificarli</span></div>`;
+    <span>Tocca un evento per modificarlo · + in alto per fuori casa, a casa e ospiti</span></div>`;
 }
 
 function renderWeek() {
@@ -767,6 +793,82 @@ async function patchShift(id, body, msg) {
 }
 
 // ---------------------------------------------------------------------------
+// Fuori casa, a casa, ospiti
+// ---------------------------------------------------------------------------
+function openStay(id) {
+  const x = id ? state.stays.find((s) => s.id === id) : null;
+  const d0 = state.day && state.day >= today() ? state.day : today();
+  const v = x || { kind: 'via', person: state.me, start_day: d0, end_day: d0, start_time: '', end_time: '', note: '', guests: '' };
+  state.sheet = { type: 'stay', id: x?.id || null, kind: v.kind, subject: v.person };
+  openSheet(`
+    <div class="sheet-head"><button class="link blue" data-close>Annulla</button><h3>${x ? 'Modifica' : 'Nuovo'}</h3><button class="link blue right" data-save-stay>Salva</button></div>
+    <div class="group"><div class="field"><div class="seg" style="width:100%" role="group" aria-label="Tipo">
+      ${Object.entries(STAY).map(([k, o]) => `<button aria-pressed="${v.kind === k}" data-stay-kind="${k}">${o.icon} ${o.label}</button>`).join('')}
+    </div></div></div>
+
+    <p class="section-title" id="stayWhoLabel">${v.kind === 'ospiti' ? 'Ospiti di' : 'Chi'}</p>
+    <div class="group"><div class="field"><div class="seg" style="width:100%" role="group" aria-label="Chi">
+      ${state.people.map((p) => `<button aria-pressed="${v.person === p}" data-stay-who="${p}"><span style="color:${colorOf(p)}">●</span> ${p}</button>`).join('')}
+    </div></div></div>
+
+    <p class="section-title">Quando</p>
+    <div class="group"><div class="stay-grid">
+      <label for="stayFrom">Dal</label><input type="date" id="stayFrom" value="${v.start_day}"><input type="time" id="stayFromT" value="${v.start_time || ''}" aria-label="Ora di inizio (facoltativa)">
+      <label for="stayTo">Al</label><input type="date" id="stayTo" value="${v.end_day}"><input type="time" id="stayToT" value="${v.end_time || ''}" aria-label="Ora di fine (facoltativa)">
+    </div></div>
+    <p class="note">Gli orari sono facoltativi. Per un solo giorno metti la stessa data in “Dal” e “Al”.</p>
+
+    <div id="guestBox" ${v.kind === 'ospiti' ? '' : 'hidden'}>
+      <p class="section-title">Quanti</p>
+      <div class="group"><div class="field"><input type="number" id="stayGuests" min="1" max="50" inputmode="numeric" value="${v.guests || ''}" placeholder="Es. 2" aria-label="Numero di ospiti" style="border:0;background:none;width:100%;font-size:17px"></div></div>
+    </div>
+
+    <p class="section-title" id="stayNoteLabel">${v.kind === 'ospiti' ? 'Chi viene' : 'Note'}</p>
+    <div class="group"><div class="field"><input id="stayNote" maxlength="200" value="${esc(v.note || '')}" placeholder="${v.kind === 'ospiti' ? 'Es. Marco e Sara' : 'Facoltativo'}" aria-label="Note" style="border:0;background:none;width:100%;font-size:17px"></div></div>
+    <p class="note" id="stayHint">${stayHint(v.kind)}</p>
+
+    ${x ? `<p class="note">Aggiunto da ${esc(x.created_by)}</p><button class="danger" data-del-stay>Elimina</button>` : ''}`);
+}
+
+const stayHint = (kind) => `Le altre ricevono una notifica.${kind === 'via' ? ' Nei giorni fuori casa non serve segnare la sveglia.' : ''}`;
+
+function setStayKind(kind) {
+  state.sheet.kind = kind;
+  $('#stayHint').textContent = stayHint(kind);
+  document.querySelectorAll('[data-stay-kind]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.stayKind === kind)));
+  $('#guestBox').hidden = kind !== 'ospiti';
+  $('#stayWhoLabel').textContent = kind === 'ospiti' ? 'Ospiti di' : 'Chi';
+  $('#stayNoteLabel').textContent = kind === 'ospiti' ? 'Chi viene' : 'Note';
+  $('#stayNote').placeholder = kind === 'ospiti' ? 'Es. Marco e Sara' : 'Facoltativo';
+}
+
+async function saveStay() {
+  const sh = state.sheet;
+  let end = $('#stayTo').value || $('#stayFrom').value;
+  const body = {
+    person: state.me, subject: sh.subject, kind: sh.kind,
+    start_day: $('#stayFrom').value, end_day: end,
+    start_time: $('#stayFromT').value, end_time: $('#stayToT').value,
+    note: $('#stayNote').value, guests: sh.kind === 'ospiti' ? $('#stayGuests').value : '',
+  };
+  if (!body.start_day) { toast('Scegli la data di inizio'); return; }
+  try {
+    const row = await api(sh.id ? `/api/stays/${sh.id}` : '/api/stays', { method: sh.id ? 'PATCH' : 'POST', body });
+    state.stays = [...state.stays.filter((x) => x.id !== row.id), row];
+    closeSheet(); render(); toast('Salvato');
+  } catch (err) { toast(err.message); }
+}
+
+async function deleteStay() {
+  const id = state.sheet.id;
+  try {
+    await api(`/api/stays/${id}`, { method: 'DELETE', body: { person: state.me } });
+    state.stays = state.stays.filter((x) => x.id !== id);
+    closeSheet(); render(); toast('Eliminato');
+  } catch (err) { toast(err.message); }
+}
+
+// ---------------------------------------------------------------------------
 // Modifica di una voce della spesa
 // ---------------------------------------------------------------------------
 function openItem(id) {
@@ -911,10 +1013,11 @@ async function disablePush() {
 // ---------------------------------------------------------------------------
 async function load() {
   try {
-    const [profiles, shifts, requests, wake, items, ver] = await Promise.all([
+    const [profiles, shifts, requests, wake, items, ver, stays] = await Promise.all([
       api('/api/profiles'), api('/api/shifts'), api('/api/requests'), api('/api/wake'), api('/api/shopping'),
-      api('/api/version').catch(() => ({})),
+      api('/api/version').catch(() => ({})), api('/api/stays').catch(() => []),
     ]);
+    state.stays = stays;
     // se è uscita una versione nuova dell'app, ricarica la pagina
     if (ver.version) {
       if (state.version && state.version !== ver.version) { location.reload(); return; }
@@ -956,6 +1059,8 @@ $('#root').addEventListener('click', async (e) => {
   const smooth = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
   if ((b = el('[data-wake]'))) return openWake(b.dataset.wake);
   if ((b = el('[data-shift]'))) return openShift(Number(b.dataset.shift));
+  if ((b = el('[data-stay]'))) return openStay(Number(b.dataset.stay));
+  if (el('[data-new-stay]')) return openStay(null);
   if ((b = el('[data-day]'))) {
     state.day = b.dataset.day;
     state.week = mondayOf(state.day);
@@ -1056,6 +1161,16 @@ $('#sheet').addEventListener('click', async (e) => {
       return;
     }
   }
+  if (state.sheet?.type === 'stay') {
+    if ((b = el('[data-stay-kind]'))) return setStayKind(b.dataset.stayKind);
+    if ((b = el('[data-stay-who]'))) {
+      state.sheet.subject = b.dataset.stayWho;
+      document.querySelectorAll('[data-stay-who]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      return;
+    }
+    if (el('[data-save-stay]')) return saveStay();
+    if (el('[data-del-stay]')) return deleteStay();
+  }
   if (state.sheet?.type === 'item') {
     if (el('[data-save-item]')) return saveItem();
     if (el('[data-del-item]')) {
@@ -1067,6 +1182,11 @@ $('#sheet').addEventListener('click', async (e) => {
   }
 });
 $('#sheet').addEventListener('change', async (e) => {
+  if (state.sheet?.type === 'stay' && e.target.id === 'stayFrom') {
+    const to = $('#stayTo');
+    if (!to.value || to.value < e.target.value) to.value = e.target.value;
+    return;
+  }
   if (state.sheet?.type !== 'shift') return;
   if (e.target.id === 'doneSw') return patchShift(state.sheet.id, { done: e.target.checked });
   if (e.target.id === 'shiftDate' && e.target.value) return patchShift(state.sheet.id, { day: e.target.value }, `Spostato a ${dayName(e.target.value)}`);
