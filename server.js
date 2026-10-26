@@ -435,6 +435,8 @@ for (const action of ['accept', 'reject', 'cancel']) {
 
 // --- Sveglia ---
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+// alcuni telefoni mandano l'orario con i secondi (07:30:00): teniamo solo ore e minuti
+const normTime = (t) => (t ? String(t).trim().slice(0, 5) : null);
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 app.get('/api/wake', wrap(async (req, res) => {
@@ -443,7 +445,8 @@ app.get('/api/wake', wrap(async (req, res) => {
 }));
 
 app.put('/api/wake', wrap(async (req, res) => {
-  const { person, day, time } = req.body;
+  const { person, day } = req.body;
+  const time = normTime(req.body.time);
   if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
   if (!DAY_RE.test(day || '')) throw new HttpError(400, 'Giorno non valido.');
   if (!TIME_RE.test(time || '')) throw new HttpError(400, 'Orario non valido: usa il formato 07:30.');
@@ -465,7 +468,8 @@ app.put('/api/wake', wrap(async (req, res) => {
 }));
 
 app.put('/api/wake/bulk', wrap(async (req, res) => {
-  const { person, time } = req.body;
+  const { person } = req.body;
+  const time = normTime(req.body.time);
   const days = [...new Set(Array.isArray(req.body.days) ? req.body.days : [])].sort();
   if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
   if (!days.length || days.length > 100 || !days.every((d) => DAY_RE.test(d))) throw new HttpError(400, 'Giorni non validi.');
@@ -532,7 +536,7 @@ function readStay(body) {
   const start_day = body.start_day, end_day = body.end_day || body.start_day;
   if (!DAY_RE.test(start_day || '') || !DAY_RE.test(end_day || '')) throw new HttpError(400, 'Date non valide.');
   if (end_day < start_day) throw new HttpError(400, 'La fine non può essere prima dell’inizio.');
-  const start_time = body.start_time || null, end_time = body.end_time || null;
+  const start_time = normTime(body.start_time), end_time = normTime(body.end_time);
   if ((start_time && !TIME_RE.test(start_time)) || (end_time && !TIME_RE.test(end_time))) throw new HttpError(400, 'Orario non valido.');
   if (start_day === end_day && start_time && end_time && end_time <= start_time) throw new HttpError(400, 'L’ora di fine deve essere dopo quella di inizio.');
   const note = (body.note || '').toString().trim().slice(0, 200) || null;
