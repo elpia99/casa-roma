@@ -328,7 +328,12 @@ async function api(path, opts = {}) {
   return data;
 }
 function toast(msg) {
-  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  const t = $('#toast');
+  // con un foglio aperto il messaggio va dentro il foglio, se no resta nascosto sotto
+  const dlg = $('#sheet');
+  if (dlg.open && t.parentNode !== dlg) dlg.append(t);
+  else if (!dlg.open && t.parentNode !== document.body) document.body.append(t);
+  t.textContent = msg; t.classList.add('show');
   clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
@@ -725,7 +730,7 @@ function renderWakeSheet() {
 
 async function saveWake() {
   const sh = state.sheet;
-  sh.time = $('#wakeTime').value;
+  sh.time = $('#wakeTime').value.slice(0, 5);
   if (!sh.time) { toast('Scegli un orario'); return; }
   const days = wakeTargetDays(sh);
   if (!days.length) { toast('Scegli almeno un giorno'); return; }
@@ -817,6 +822,7 @@ function openStay(id) {
       <label for="stayTo">Al</label><input type="date" id="stayTo" value="${v.end_day}"><input type="time" id="stayToT" value="${v.end_time || ''}" aria-label="Ora di fine (facoltativa)">
     </div></div>
     <p class="note">Gli orari sono facoltativi. Per un solo giorno metti la stessa data in “Dal” e “Al”.</p>
+    <p class="error" id="stayError" role="alert" style="margin:8px 16px 0"></p>
 
     <div id="guestBox" ${v.kind === 'ospiti' ? '' : 'hidden'}>
       <p class="section-title">Quanti</p>
@@ -848,15 +854,20 @@ async function saveStay() {
   const body = {
     person: state.me, subject: sh.subject, kind: sh.kind,
     start_day: $('#stayFrom').value, end_day: end,
-    start_time: $('#stayFromT').value, end_time: $('#stayToT').value,
+    start_time: $('#stayFromT').value.slice(0, 5), end_time: $('#stayToT').value.slice(0, 5),
     note: $('#stayNote').value, guests: sh.kind === 'ospiti' ? $('#stayGuests').value : '',
   };
-  if (!body.start_day) { toast('Scegli la data di inizio'); return; }
+  const showErr = (m) => { $('#stayError').textContent = m; $('#stayError').scrollIntoView({ block: 'nearest' }); };
+  if (!body.start_day) return showErr('Scegli la data di inizio.');
+  if (body.end_day < body.start_day) return showErr('La data di fine è prima di quella di inizio.');
+  if (body.start_day === body.end_day && body.start_time && body.end_time && body.end_time <= body.start_time) {
+    return showErr('Nello stesso giorno l’ora di fine deve essere dopo quella di inizio. Se torni il giorno dopo, cambia la data in “Al”.');
+  }
   try {
     const row = await api(sh.id ? `/api/stays/${sh.id}` : '/api/stays', { method: sh.id ? 'PATCH' : 'POST', body });
     state.stays = [...state.stays.filter((x) => x.id !== row.id), row];
     closeSheet(); render(); toast('Salvato');
-  } catch (err) { toast(err.message); }
+  } catch (err) { showErr(err.message); }
 }
 
 async function deleteStay() {
@@ -1135,7 +1146,7 @@ $('#sheet').addEventListener('click', async (e) => {
   if (el('[data-save-wake]')) return saveWake();
   if (state.sheet?.type === 'wake') {
     const sh = state.sheet;
-    if ($('#wakeTime')) sh.time = $('#wakeTime').value;
+    if ($('#wakeTime')) sh.time = $('#wakeTime').value.slice(0, 5);
     if ((b = el('[data-mode]'))) { sh.mode = b.dataset.mode; return renderWakeSheet(); }
     if ((b = el('[data-dow]'))) {
       const d = Number(b.dataset.dow);
