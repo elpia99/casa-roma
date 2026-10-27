@@ -824,17 +824,13 @@ async function patchShift(id, body, msg) {
 function openStay(id) {
   const x = id ? state.stays.find((s) => s.id === id) : null;
   const d0 = state.day && state.day >= today() ? state.day : today();
+  if (x && x.person !== state.me) return showStay(x);
   const v = x || { kind: 'via', person: state.me, start_day: d0, end_day: d0, start_time: '', end_time: '', note: '', guests: '' };
-  state.sheet = { type: 'stay', id: x?.id || null, kind: v.kind, subject: v.person };
+  state.sheet = { type: 'stay', id: x?.id || null, kind: v.kind, subject: state.me };
   openSheet(`
     <div class="sheet-head"><button class="link blue" data-close>Annulla</button><h3>${x ? 'Modifica' : 'Nuovo'}</h3><button class="link blue right" data-save-stay>Salva</button></div>
     <div class="group"><div class="field"><div class="seg" style="width:100%" role="group" aria-label="Tipo">
       ${Object.entries(STAY).filter(([k]) => k !== 'casa' || v.kind === 'casa').map(([k, o]) => `<button aria-pressed="${v.kind === k}" data-stay-kind="${k}">${o.icon} ${o.label}</button>`).join('')}
-    </div></div></div>
-
-    <p class="section-title" id="stayWhoLabel">${v.kind === 'ospiti' ? 'Ospiti di' : 'Chi'}</p>
-    <div class="group"><div class="field"><div class="seg" style="width:100%" role="group" aria-label="Chi">
-      ${state.people.map((p) => `<button aria-pressed="${v.person === p}" data-stay-who="${p}"><span style="color:${colorOf(p)}">●</span> ${p}</button>`).join('')}
     </div></div></div>
 
     <p class="section-title">Quando</p>
@@ -854,7 +850,27 @@ function openStay(id) {
     <div class="group"><div class="field"><input id="stayNote" maxlength="200" value="${esc(v.note || '')}" placeholder="${v.kind === 'ospiti' ? 'Es. Marco e Sara' : 'Facoltativo'}" aria-label="Note" style="border:0;background:none;width:100%;font-size:17px"></div></div>
     <p class="note" id="stayHint">${stayHint(v.kind)}</p>
 
-    ${x ? `<p class="note">Aggiunto da ${esc(x.created_by)}</p><button class="danger" data-del-stay>Elimina</button>` : ''}`);
+    ${x ? '<button class="danger" data-del-stay>Elimina</button>' : ''}`);
+}
+
+// dettagli in sola lettura per gli eventi delle coinquiline
+function showStay(x) {
+  state.sheet = { type: 'stay-view', id: x.id };
+  const k = STAY[x.kind];
+  const fmt = (d) => cap(dayName(d));
+  const when = x.start_day === x.end_day
+    ? `${fmt(x.start_day)}${x.start_time || x.end_time ? `, ${stayWhen(x)}` : ''}`
+    : `${fmt(x.start_day)}${x.start_time ? ` ore ${x.start_time}` : ''} → ${fmt(x.end_day)}${x.end_time ? ` ore ${x.end_time}` : ''}`;
+  const row = (label, value) => value ? `<div class="field"><span class="muted">${label}</span><span style="text-align:right">${esc(value)}</span></div>` : '';
+  openSheet(`
+    <div class="sheet-head"><span style="min-width:72px"></span><h3>${k.label}</h3><button class="link blue right" data-close>Fine</button></div>
+    <div class="big-title"><span class="dot" style="--c:${colorOf(x.person)}"></span>${k.icon} ${esc(x.person)}</div>
+    <div class="group" style="margin-top:14px">
+      ${row('Quando', when)}
+      ${x.kind === 'ospiti' ? row('Quanti', x.guests ? String(x.guests) : '') : ''}
+      ${row(x.kind === 'ospiti' ? 'Chi viene' : 'Note', x.note || '')}
+    </div>
+    <p class="note">Solo ${esc(x.person)} può modificarlo.</p>`);
 }
 
 const stayHint = (kind) => `Le altre ricevono una notifica.${kind === 'via' ? ' Nei giorni fuori casa non serve segnare la sveglia.' : ''}`;
@@ -864,7 +880,6 @@ function setStayKind(kind) {
   $('#stayHint').textContent = stayHint(kind);
   document.querySelectorAll('[data-stay-kind]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.stayKind === kind)));
   $('#guestBox').hidden = kind !== 'ospiti';
-  $('#stayWhoLabel').textContent = kind === 'ospiti' ? 'Ospiti di' : 'Chi';
   $('#stayNoteLabel').textContent = kind === 'ospiti' ? 'Chi viene' : 'Note';
   $('#stayNote').placeholder = kind === 'ospiti' ? 'Es. Marco e Sara' : 'Facoltativo';
 }
