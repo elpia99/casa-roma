@@ -556,7 +556,8 @@ app.get('/api/stays', wrap(async (req, res) => {
 app.post('/api/stays', wrap(async (req, res) => {
   const { person } = req.body;
   if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
-  const st = readStay(req.body);
+  // si può segnare solo per sé
+  const st = readStay({ ...req.body, subject: person });
   const { rows: [row] } = await pool.query(
     `INSERT INTO stays (kind, person, start_day, end_day, start_time, end_time, note, guests, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
@@ -570,7 +571,10 @@ app.post('/api/stays', wrap(async (req, res) => {
 app.patch('/api/stays/:id', wrap(async (req, res) => {
   const { person } = req.body;
   if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
-  const st = readStay(req.body);
+  const { rows: [cur] } = await pool.query('SELECT person FROM stays WHERE id = $1', [req.params.id]);
+  if (!cur) throw new HttpError(404, 'Non trovato.');
+  if (cur.person !== person) throw new HttpError(403, `Solo ${cur.person} può modificarlo.`);
+  const st = readStay({ ...req.body, subject: person });
   const { rows: [row] } = await pool.query(
     `UPDATE stays SET kind = $1, person = $2, start_day = $3, end_day = $4, start_time = $5, end_time = $6, note = $7, guests = $8
      WHERE id = $9 RETURNING *`,
@@ -585,6 +589,8 @@ app.patch('/api/stays/:id', wrap(async (req, res) => {
 app.delete('/api/stays/:id', wrap(async (req, res) => {
   const { person } = req.body;
   if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
+  const { rows: [cur] } = await pool.query('SELECT person FROM stays WHERE id = $1', [req.params.id]);
+  if (cur && cur.person !== person) throw new HttpError(403, `Solo ${cur.person} può eliminarlo.`);
   const { rows: [row] } = await pool.query('DELETE FROM stays WHERE id = $1 RETURNING *', [req.params.id]);
   res.json({ ok: true });
   if (row) {
