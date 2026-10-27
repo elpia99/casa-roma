@@ -512,7 +512,7 @@ function renderCalendario() {
         <button class="arrow" data-step="-1" aria-label="${isWeek ? 'Settimana precedente' : 'Mese precedente'}">‹</button>
         <button class="link" data-today>Oggi</button>
         <button class="arrow" data-step="1" aria-label="${isWeek ? 'Settimana successiva' : 'Mese successivo'}">›</button>
-        <button class="arrow plus" data-new-stay aria-label="Aggiungi: fuori casa, a casa, ospiti">+</button>
+        <button class="arrow plus" data-new-stay aria-label="Aggiungi: fuori casa o ospiti">+</button>
       </div>
     </header>
     <div class="viewseg"><div class="seg" role="group" aria-label="Vista">
@@ -541,8 +541,8 @@ function dayEvents(d, withAdd) {
     const k = STAY[x.kind];
     const who = x.kind === 'ospiti' ? [x.note || (x.guests ? `${x.guests} pers.` : ''), `da ${x.person}`].filter(Boolean).join(' ') : x.person;
     const when = stayWhen(x);
-    return `<button class="ev stay" style="--c:${colorOf(x.person)}" data-stay="${x.id}" aria-label="${k.label}, ${esc(who)}${when ? `, ${when}` : ''}">
-      <span class="s">${k.icon} ${k.short}</span><span class="l">${k.icon} ${k.label} · ${esc(who)}${when ? ` · ${when}` : ''}</span></button>`;
+    // nel calendario solo icona e nome: i dettagli si vedono aprendolo
+    return `<button class="ev stay" style="--c:${colorOf(x.person)}" data-stay="${x.id}" aria-label="${k.label}, ${esc(who)}${when ? `, ${when}` : ''}. Apri per i dettagli">${k.icon} ${esc(x.person)}</button>`;
   }).join('');
   const add = withAdd && d >= t && !wakeOf(state.me, d) && !isAway(state.me, d)
     ? `<button class="ev add" data-wake="${d}" aria-label="Aggiungi la tua sveglia per ${dayName(d)}">+<span class="l"> Sveglia</span></button>` : '';
@@ -551,7 +551,7 @@ function dayEvents(d, withAdd) {
 
 function legend() {
   return `<div class="cal-legend">${state.people.map((p) => `<span class="chip" style="--c:${colorOf(p)}">${p}</span>`).join('')}
-    <span>Tocca un evento per modificarlo · + in alto per fuori casa, a casa e ospiti${state.view === 'week' ? ' · scorri su o giù oltre la fine della pagina per cambiare settimana' : ''}</span></div>`;
+    <span>Tocca un evento per modificarlo · + in alto per fuori casa e ospiti${state.view === 'week' ? ' · scorri su o giù oltre la fine della pagina per cambiare settimana' : ''}</span></div>`;
 }
 
 function renderWeek() {
@@ -829,7 +829,7 @@ function openStay(id) {
   openSheet(`
     <div class="sheet-head"><button class="link blue" data-close>Annulla</button><h3>${x ? 'Modifica' : 'Nuovo'}</h3><button class="link blue right" data-save-stay>Salva</button></div>
     <div class="group"><div class="field"><div class="seg" style="width:100%" role="group" aria-label="Tipo">
-      ${Object.entries(STAY).map(([k, o]) => `<button aria-pressed="${v.kind === k}" data-stay-kind="${k}">${o.icon} ${o.label}</button>`).join('')}
+      ${Object.entries(STAY).filter(([k]) => k !== 'casa' || v.kind === 'casa').map(([k, o]) => `<button aria-pressed="${v.kind === k}" data-stay-kind="${k}">${o.icon} ${o.label}</button>`).join('')}
     </div></div></div>
 
     <p class="section-title" id="stayWhoLabel">${v.kind === 'ospiti' ? 'Ospiti di' : 'Chi'}</p>
