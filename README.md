@@ -14,8 +14,9 @@ App web per Giulia, Ellen e Claudia: calendario condiviso con turni di pulizia e
 - **Pulizie**: Bagno e Cucina & Corridoio, a rotazione tra le tre, dal 27 ottobre a fine dicembre 2026.
   Ogni turno parte fisso il martedì. Di ogni turno si può cambiare la data, il tipo di pulizia e la persona assegnata;
   se si sceglie il tipo o la persona dell'altro turno della settimana, i due turni si scambiano. Le altre ricevono una notifica.
-- **Fuori casa, a casa, ospiti**: con il **+** in alto nel calendario si segna quando qualcuna va via, quando è a casa
-  o quando vengono ospiti (con date, orari facoltativi, quante persone e chi). Compare nel calendario e le altre ricevono una notifica.
+- **Fuori casa e ospiti**: con il **+** in alto nel calendario si segna quando qualcuna va via
+  o quando vengono ospiti (con date, orari facoltativi, quante persone e chi). Nel calendario compaiono con icona e nome;
+  toccandoli si vedono e si modificano i dettagli. Le altre ricevono una notifica.
   Chi è fuori casa non riceve il promemoria della sveglia.
 - **Spesa**: lista condivisa da spuntare; toccando una voce si modificano nome e quantità, o la si elimina.
 
