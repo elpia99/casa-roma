@@ -551,7 +551,7 @@ function dayEvents(d, withAdd) {
 
 function legend() {
   return `<div class="cal-legend">${state.people.map((p) => `<span class="chip" style="--c:${colorOf(p)}">${p}</span>`).join('')}
-    <span>Tocca un evento per modificarlo · + in alto per fuori casa, a casa e ospiti</span></div>`;
+    <span>Tocca un evento per modificarlo · + in alto per fuori casa, a casa e ospiti${state.view === 'week' ? ' · scorri su o giù oltre la fine della pagina per cambiare settimana' : ''}</span></div>`;
 }
 
 function renderWeek() {
@@ -618,16 +618,37 @@ function step(n) {
     state.month = addMonths(state.month, n);
   }
   render();
+  window.scrollTo(0, 0);
 }
 
-// scorrimento con il dito (settimana o mese)
-let touchX = null;
-document.addEventListener('touchstart', (e) => { if (e.target.closest('#grid')) touchX = e.touches[0].clientX; }, { passive: true });
-document.addEventListener('touchend', (e) => {
-  if (touchX === null) return;
-  const dx = e.changedTouches[0].clientX - touchX; touchX = null;
-  if (Math.abs(dx) > 60) step(dx < 0 ? 1 : -1);
+// Scorrimento con il dito: un solo passo per gesto.
+// - orizzontale sul calendario: settimana/mese successivo o precedente
+// - in vista settimana, verticale: verso l'alto a fondo pagina = settimana successiva,
+//   verso il basso in cima alla pagina = settimana precedente
+let touch = null;
+document.addEventListener('touchstart', (e) => {
+  touch = null;
+  if (state.screen !== 'calendario' || $('#sheet').open || e.touches.length > 1 || !e.target.closest('#root main')) return;
+  const p = e.touches[0];
+  const doc = document.documentElement;
+  touch = {
+    x: p.clientX, y: p.clientY,
+    grid: !!e.target.closest('#grid'),
+    atTop: window.scrollY <= 2,
+    atBottom: window.innerHeight + window.scrollY >= doc.scrollHeight - 2,
+  };
 }, { passive: true });
+document.addEventListener('touchend', (e) => {
+  if (!touch) return;
+  const st = touch; touch = null;
+  const p = e.changedTouches[0];
+  const dx = p.clientX - st.x, dy = p.clientY - st.y;
+  if (st.grid && Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy)) return step(dx < 0 ? 1 : -1);
+  if (state.view !== 'week' || Math.abs(dy) < 70 || Math.abs(dy) < 2 * Math.abs(dx)) return;
+  if (dy < 0 && st.atBottom) step(1);
+  else if (dy > 0 && st.atTop) step(-1);
+}, { passive: true });
+document.addEventListener('touchcancel', () => { touch = null; }, { passive: true });
 
 // ---------------------------------------------------------------------------
 // Fogli: sveglia e turno
