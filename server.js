@@ -720,9 +720,9 @@ async function checkReminder() {
   if (!rowCount) return;
   const tomorrow = addDays(today, 1);
   const { rows } = await pool.query('SELECT person FROM wake_times WHERE day = $1', [tomorrow]);
-  // chi domani è fuori casa non deve segnare la sveglia
+  // chi domani è fuori casa non deve segnare la sveglia (il giorno della partenza invece sì)
   const { rows: away } = await pool.query(
-    `SELECT person FROM stays WHERE kind = 'via' AND start_day <= $1 AND end_day >= $1`, [tomorrow]
+    `SELECT person FROM stays WHERE kind = 'via' AND start_day < $1 AND end_day >= $1`, [tomorrow]
   );
   const missing = PEOPLE.filter((p) => !rows.some((r) => r.person === p) && !away.some((a) => a.person === p));
   for (const person of missing) {
