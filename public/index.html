@@ -216,7 +216,9 @@
   .big-title .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--c); }
   .field { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px 16px; min-height: 44px; }
   .field label { flex: 1; }
-  .time-big { font-size: 44px; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: .01em; background: var(--fill); border: 0; border-radius: 12px; padding: 4px 14px; width: 100%; text-align: center; color: var(--label); }
+  input[type="date"], input[type="time"] { -webkit-appearance: none; appearance: none; min-width: 0; max-width: 100%; }
+  .time-big { display: block; font-size: 44px; font-weight: 300; font-variant-numeric: tabular-nums; letter-spacing: .01em; background: var(--fill); border: 0; border-radius: 12px; padding: 4px 14px; width: 100%; min-height: 64px; text-align: center; color: var(--label); }
+  .time-big::-webkit-date-and-time-value { text-align: center; }
   .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--fill); border-radius: 9px; padding: 2px; gap: 2px; }
   .seg button { border: 0; background: none; border-radius: 7px; padding: 7px 6px; font-size: 14px; font-weight: 500; }
   .seg button[aria-pressed="true"] { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.15); font-weight: 600; }
@@ -368,7 +370,8 @@ const pendingFor = (shiftId) => state.requests.find((r) => r.status === 'in_atte
 const taskShort = (task) => (task === 'bagno' ? 'Bagno' : 'Cucina');
 const STAY = { via: { icon: '✈️', label: 'Fuori casa', short: 'Via' }, casa: { icon: '🏠', label: 'A casa', short: 'Casa' }, ospiti: { icon: '👥', label: 'Ospiti', short: 'Ospiti' } };
 const staysOn = (day) => state.stays.filter((x) => x.start_day <= day && day <= x.end_day);
-const isAway = (person, day) => staysOn(day).some((x) => x.kind === 'via' && x.person === person);
+// fuori casa per la sveglia: il giorno della partenza la sveglia si segna, quelli dopo no
+const isAway = (person, day) => staysOn(day).some((x) => x.kind === 'via' && x.person === person && day > x.start_day);
 function stayWhen(x) {
   if (x.start_day === x.end_day) {
     const t = x.start_time && x.end_time ? `${x.start_time}–${x.end_time}` : x.start_time ? `dalle ${x.start_time}` : x.end_time ? `fino alle ${x.end_time}` : '';
@@ -665,10 +668,16 @@ $('#sheet').addEventListener('close', () => { state.sheet = null; });
 const DOW_ORDER = [1, 2, 3, 4, 5, 6, 0]; // da lunedì a domenica
 const DOW_LETTER = { 1: 'L', 2: 'M', 3: 'M', 4: 'G', 5: 'V', 6: 'S', 0: 'D' };
 
+// l'ultimo orario che ho segnato, per proporlo già compilato
+function lastWake() {
+  const mine = state.wake.filter((w) => w.person === state.me).sort((a, b) => b.day.localeCompare(a.day));
+  return mine[0]?.time || '';
+}
+
 function openWake(day) {
   const prev = state.sheet && state.sheet.type === 'wake' && state.sheet.day === day ? state.sheet : null;
   state.sheet = prev || {
-    type: 'wake', day, time: wakeOf(state.me, day), mode: 'one',
+    type: 'wake', day, time: wakeOf(state.me, day) || lastWake() || '07:00', mode: 'one',
     dows: [parse(day).getDay()], weeks: 4, confirmDelete: false,
   };
   renderWakeSheet();
