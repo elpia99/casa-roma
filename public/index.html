@@ -758,6 +758,18 @@ function renderWakeSheet() {
     ${del}`);
 }
 
+// un solo salvataggio alla volta: più tocchi veloci su "Salva" non creano doppioni
+let busy = false;
+async function guarded(fn) {
+  if (busy) return;
+  busy = true;
+  document.querySelectorAll('#sheet [data-save-wake], #sheet [data-save-stay], #sheet [data-save-item]').forEach((b) => { b.disabled = true; });
+  try { await fn(); } finally {
+    busy = false;
+    document.querySelectorAll('#sheet [data-save-wake], #sheet [data-save-stay], #sheet [data-save-item]').forEach((b) => { b.disabled = false; });
+  }
+}
+
 async function saveWake() {
   const sh = state.sheet;
   sh.time = $('#wakeTime').value.slice(0, 5);
@@ -1188,7 +1200,7 @@ $('#sheet').addEventListener('click', async (e) => {
   const el = (sel) => e.target.closest(sel);
   let b;
   if (el('[data-close]')) return closeSheet();
-  if (el('[data-save-wake]')) return saveWake();
+  if (el('[data-save-wake]')) return guarded(saveWake);
   if (state.sheet?.type === 'wake') {
     const sh = state.sheet;
     if ($('#wakeTime')) sh.time = $('#wakeTime').value.slice(0, 5);
@@ -1224,11 +1236,11 @@ $('#sheet').addEventListener('click', async (e) => {
       document.querySelectorAll('[data-stay-who]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
       return;
     }
-    if (el('[data-save-stay]')) return saveStay();
+    if (el('[data-save-stay]')) return guarded(saveStay);
     if (el('[data-del-stay]')) return deleteStay();
   }
   if (state.sheet?.type === 'item') {
-    if (el('[data-save-item]')) return saveItem();
+    if (el('[data-save-item]')) return guarded(saveItem);
     if (el('[data-del-item]')) {
       const id = state.sheet.id;
       closeSheet();
@@ -1249,14 +1261,15 @@ $('#sheet').addEventListener('change', async (e) => {
 });
 $('#sheet').addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
-  if (e.target.id === 'wakeTime') { e.preventDefault(); saveWake(); }
-  if (e.target.id === 'itemName' || e.target.id === 'itemQty') { e.preventDefault(); saveItem(); }
+  if (e.target.id === 'wakeTime') { e.preventDefault(); guarded(saveWake); }
+  if (e.target.id === 'itemName' || e.target.id === 'itemQty') { e.preventDefault(); guarded(saveItem); }
 });
 
 // spesa: aggiunta e spunta
 $('#root').addEventListener('submit', async (e) => {
   if (e.target.id !== 'addForm') return;
   e.preventDefault();
+  if (busy) return;
   const f = e.target;
   const name = f.elements.namedItem('name').value.trim(), qty = f.elements.namedItem('qty').value.trim();
   if (!name) return;
