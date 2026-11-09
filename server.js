@@ -126,6 +126,12 @@ async function initDb() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     -- ogni turno di pulizia ha un giorno: di default il martedì della settimana, poi si può spostare
+    -- via i doppioni identici creati per errore (stesso evento salvato più volte)
+    DELETE FROM stays a USING stays b
+      WHERE a.id > b.id AND a.kind = b.kind AND a.person = b.person
+        AND a.start_day = b.start_day AND a.end_day = b.end_day
+        AND a.start_time IS NOT DISTINCT FROM b.start_time AND a.end_time IS NOT DISTINCT FROM b.end_time
+        AND a.note IS NOT DISTINCT FROM b.note AND a.guests IS NOT DISTINCT FROM b.guests;
     ALTER TABLE shifts ADD COLUMN IF NOT EXISTS day DATE;
     UPDATE shifts SET day = week_start WHERE day IS NULL;
   `);
@@ -558,6 +564,14 @@ app.post('/api/stays', wrap(async (req, res) => {
   if (!isPerson(person)) throw new HttpError(400, 'Persona non valida.');
   // si può segnare solo per sé
   const st = readStay({ ...req.body, subject: person });
+  // se esiste già lo stesso identico evento, non lo duplico
+  const { rows: [same] } = await pool.query(
+    `SELECT * FROM stays WHERE kind = $1 AND person = $2 AND start_day = $3 AND end_day = $4
+       AND start_time IS NOT DISTINCT FROM $5 AND end_time IS NOT DISTINCT FROM $6
+       AND note IS NOT DISTINCT FROM $7 AND guests IS NOT DISTINCT FROM $8 LIMIT 1`,
+    [st.kind, st.person, st.start_day, st.end_day, st.start_time, st.end_time, st.note, st.guests]
+  );
+  if (same) return res.json(same);
   const { rows: [row] } = await pool.query(
     `INSERT INTO stays (kind, person, start_day, end_day, start_time, end_time, note, guests, created_by)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
